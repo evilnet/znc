@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,7 +197,7 @@ public:
 		AddCommand("Help",        static_cast<CModCommand::ModCmdFunc>(&CSASLMod::PrintHelp),
 			"search", "Generate this output");
 		AddCommand("Set",         static_cast<CModCommand::ModCmdFunc>(&CSASLMod::Set),
-			"username password", "Set the password for DH-BLOWFISH/DH-AES/PLAIN");
+			"username password", "Set the username and password for DH-BLOWFISH/DH-AES/PLAIN");
 		AddCommand("Mechanism",   static_cast<CModCommand::ModCmdFunc>(&CSASLMod::SetMechanismCommand),
 			"[mechanism[ ...]]", "Set the mechanisms to be attempted (in order)");
 		AddCommand("RequireAuth", static_cast<CModCommand::ModCmdFunc>(&CSASLMod::RequireAuthCommand),
@@ -224,42 +224,52 @@ public:
 	}
 
 	void Set(const CString& sLine) {
-		SetNV("username", sLine.Token(1));
-		SetNV("password", sLine.Token(2));
+		if (!SaslImpersonation()) {
+			SetNV("username", sLine.Token(1));
+			SetNV("password", sLine.Token(2));
 
-		PutModule("Username has been set to [" + GetNV("username") + "]");
-		PutModule("Password has been set to [" + GetNV("password") + "]");
+			PutModule("Username has been set to [" + GetNV("username") + "]");
+			PutModule("Password has been set to [" + GetNV("password") + "]");
+		}
 	}
-
+	
+	bool SaslImpersonation() const {
+		return GetNV("saslimpersonation").ToBool();
+	}
+	
 	void SetMechanismCommand(const CString& sLine) {
-		CString sMechanisms = sLine.Token(1, true).AsUpper();
+		if (!SaslImpersonation()) {
+			CString sMechanisms = sLine.Token(1, true).AsUpper();
 
-		if (!sMechanisms.empty()) {
-			VCString vsMechanisms;
-			sMechanisms.Split(" ", vsMechanisms);
+			if (!sMechanisms.empty()) {
+				VCString vsMechanisms;
+				sMechanisms.Split(" ", vsMechanisms);
 
-			for (VCString::const_iterator it = vsMechanisms.begin(); it != vsMechanisms.end(); ++it) {
-				if (!SupportsMechanism(*it)) {
-					PutModule("Unsupported mechanism: " + *it);
-					return;
+				for (VCString::const_iterator it = vsMechanisms.begin(); it != vsMechanisms.end(); ++it) {
+					if (!SupportsMechanism(*it)) {
+						PutModule("Unsupported mechanism: " + *it);
+						return;
+					}
 				}
+
+				SetNV(NV_MECHANISMS, sMechanisms);
 			}
 
-			SetNV(NV_MECHANISMS, sMechanisms);
+			PutModule("Current mechanisms set: " + GetMechanismsString());
 		}
-
-		PutModule("Current mechanisms set: " + GetMechanismsString());
 	}
 
 	void RequireAuthCommand(const CString& sLine) {
-		if (!sLine.Token(1).empty()) {
-			SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
-		}
+		if (!SaslImpersonation()) {
+			if (!sLine.Token(1).empty()) {
+				SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
+			}
 
-		if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
-			PutModule("We require SASL negotiation to connect");
-		} else {
-			PutModule("We will connect even if SASL fails");
+			if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
+				PutModule("We require SASL negotiation to connect");
+			} else {
+				PutModule("We will connect even if SASL fails");
+			}
 		}
 	}
 
@@ -459,7 +469,7 @@ public:
 
 	void Authenticate(const CString& sLine) {
 		if (m_Mechanisms.GetCurrent().Equals("PLAIN") && sLine.Equals("+")) {
-			CString sAuthLine = GetNV("username") + '\0' + GetNV("username")  + '\0' + GetNV("password");
+			CString sAuthLine = (SaslImpersonation() ? GetNV("impersonationuser") : GetNV("username")) + '\0' + GetNV("username")  + '\0' + GetNV("password");
 			sAuthLine.Base64Encode();
 			PutIRC("AUTHENTICATE " + sAuthLine);
 #ifdef HAVE_SASL_MECHANISM
@@ -478,7 +488,7 @@ public:
 		return sCap.Equals("sasl");
 	}
 
-	virtual void OnServerCapResult(const CString& sCap, bool bSuccess) {
+	virtual void OnServerCapResult(const CString& sCap, const bool bSuccess) {
 		if (sCap.Equals("sasl")) {
 			if (bSuccess) {
 				GetMechanismsString().Split(" ", m_Mechanisms);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -308,7 +308,6 @@ void CClient::UserCommand(CString& sLine) {
 		}
 
 		CString sArgs = sLine.Token(1, true);
-		sArgs.Trim();
 		CServer *pServer = NULL;
 
 		if (!sArgs.empty()) {
@@ -383,34 +382,6 @@ void CClient::UserCommand(CString& sLine) {
 
 			PutStatus("There were [" + CString(uMatches) + "] channels matching [" + sChan + "]");
 			PutStatus("Enabled [" + CString(uEnabled) + "] channels");
-		}
-	} else if (sCommand.Equals("DISABLECHAN")) {
-		if (!m_pNetwork) {
-			PutStatus("You must be connected with a network to use this command");
-			return;
-		}
-
-		CString sChan = sLine.Token(1, true);
-
-		if (sChan.empty()) {
-			PutStatus("Usage: DisableChan <channel>");
-		} else {
-			const vector<CChan*>& vChans = m_pNetwork->GetChans();
-			vector<CChan*>::const_iterator it;
-			unsigned int uMatches = 0, uDisabled = 0;
-			for (it = vChans.begin(); it != vChans.end(); ++it) {
-				if (!(*it)->GetName().WildCmp(sChan))
-					continue;
-				uMatches++;
-
-				if ((*it)->IsDisabled())
-					continue;
-				uDisabled++;
-				(*it)->Disable();
-			}
-
-			PutStatus("There were [" + CString(uMatches) + "] channels matching [" + sChan + "]");
-			PutStatus("Disabled [" + CString(uDisabled) + "] channels");
 		}
 	} else if (sCommand.Equals("LISTCHANS")) {
 		if (!m_pNetwork) {
@@ -519,6 +490,11 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus(sNetworkAddError);
 		}
 	} else if (sCommand.Equals("DELNETWORK")) {
+        if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to remove a Network. Ask an admin to remove the network for you.");
+			return;
+		}
+        
 		CString sNetwork = sLine.Token(1);
 
 		if (sNetwork.empty()) {
@@ -684,7 +660,12 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus("You don't have a network named " + sNetwork);
 		}
 	} else if (sCommand.Equals("ADDSERVER")) {
-		CString sServer = sLine.Token(1);
+		if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to add a Server. Ask an admin to add the server for you.");
+			return;
+		}
+        
+        CString sServer = sLine.Token(1);
 
 		if (!m_pNetwork) {
 			PutStatus("You must be connected with a network to use this command");
@@ -703,6 +684,11 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus("Perhaps the server is already added or openssl is disabled?");
 		}
 	} else if (sCommand.Equals("REMSERVER") || sCommand.Equals("DELSERVER")) {
+        if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to remove a Server. Ask an admin to remove the server for you.");
+			return;
+		}
+        
 		if (!m_pNetwork) {
 			PutStatus("You must be connected with a network to use this command");
 			return;
@@ -1255,10 +1241,10 @@ void CClient::UserCommand(CString& sLine) {
 			return;
 		}
 		m_pNetwork->SetBindHost("");
-		PutStatus("Bind host cleared for this network.");
+		PutStatus("Bind host cleared");
 	} else if (sCommand.Equals("CLEARUSERBINDHOST") && (m_pUser->IsAdmin() || !m_pUser->DenySetBindHost())) {
 		m_pUser->SetBindHost("");
-		PutStatus("Bind host cleared for your user.");
+		PutStatus("Bind host cleared");
 	} else if (sCommand.Equals("SHOWBINDHOST")) {
 		PutStatus("This user's default bind host " + (m_pUser->GetBindHost().empty() ? "not set" : "is [" + m_pUser->GetBindHost() + "]"));
 		if (m_pNetwork) {
@@ -1430,7 +1416,6 @@ void CClient::UserPortCommand(CString& sLine) {
 		Table.AddColumn("SSL");
 		Table.AddColumn("Proto");
 		Table.AddColumn("IRC/Web");
-		Table.AddColumn("URIPrefix");
 
 		vector<CListener*>::const_iterator it;
 		const vector<CListener*>& vpListeners = CZNC::Get().GetListeners();
@@ -1446,7 +1431,6 @@ void CClient::UserPortCommand(CString& sLine) {
 
 			CListener::EAcceptType eAccept = (*it)->GetAcceptType();
 			Table.SetCell("IRC/Web", (eAccept == CListener::ACCEPT_ALL ? "All" : (eAccept == CListener::ACCEPT_IRC ? "IRC" : "Web")));
-			Table.SetCell("URIPrefix", (*it)->GetURIPrefix() + "/");
 		}
 
 		PutStatus(Table);
@@ -1485,13 +1469,12 @@ void CClient::UserPortCommand(CString& sLine) {
 		}
 
 		if (sPort.empty() || sAddr.empty() || sAccept.empty()) {
-			PutStatus("Usage: AddPort <[+]port> <ipv4|ipv6|all> <web|irc|all> [bindhost [uriprefix]]");
+			PutStatus("Usage: AddPort <[+]port> <ipv4|ipv6|all> <web|irc|all> [bindhost]");
 		} else {
 			bool bSSL = (sPort.Left(1).Equals("+"));
 			const CString sBindHost = sLine.Token(4);
-			const CString sURIPrefix = sLine.Token(5);
 
-			CListener* pListener = new CListener(uPort, sBindHost, sURIPrefix, bSSL, eAddr, eAccept);
+			CListener* pListener = new CListener(uPort, sBindHost, bSSL, eAddr, eAccept);
 
 			if (!pListener->Listen()) {
 				delete pListener;
@@ -1559,55 +1542,50 @@ void CClient::HelpUser() {
 		Table.SetCell("Description", "List all clients connected to your ZNC user");
 	}
 
-	Table.AddRow();
-	Table.SetCell("Command", "ListServers");
-	Table.SetCell("Description", "List all servers of current IRC network");
+    if (m_pUser->IsAdmin()) {
+		Table.AddRow();
+		Table.SetCell("Command", "ListServers");
+		Table.SetCell("Description", "List all servers of current IRC network");
 
-	Table.AddRow();
-	Table.SetCell("Command", "AddNetwork");
-	Table.SetCell("Arguments", "<name>");
-	Table.SetCell("Description", "Add a network to your user");
+		Table.AddRow();
+		Table.SetCell("Command", "AddNetwork");
+		Table.SetCell("Arguments", "<name>");
+		Table.SetCell("Description", "Add a network to your user");
 
-	Table.AddRow();
-	Table.SetCell("Command", "DelNetwork");
-	Table.SetCell("Arguments", "<name>");
-	Table.SetCell("Description", "Delete a network from your user");
+		Table.AddRow();
+		Table.SetCell("Command", "DelNetwork");
+		Table.SetCell("Arguments", "<name>");
+		Table.SetCell("Description", "Delete a network from your user");
 
-	Table.AddRow();
-	Table.SetCell("Command", "ListNetworks");
-	Table.SetCell("Description", "List all networks");
+		Table.AddRow();
+		Table.SetCell("Command", "ListNetworks");
+		Table.SetCell("Description", "List all networks");
 
-	if (m_pUser->IsAdmin()) {
 		Table.AddRow();
 		Table.SetCell("Command", "MoveNetwork");
 		Table.SetCell("Arguments", "old-user old-net new-user [new-net]");
 		Table.SetCell("Description", "Move an IRC network from one user to another");
+
+		Table.AddRow();
+		Table.SetCell("Command", "JumpNetwork");
+		Table.SetCell("Arguments", "<network>");
+		Table.SetCell("Description", "Jump to another network");
+
+		Table.AddRow();
+		Table.SetCell("Command", "AddServer");
+		Table.SetCell("Arguments", "<host> [[+]port] [pass]");
+		Table.SetCell("Description", "Add a server to the list of alternate/backup servers of current IRC network.");
+
+		Table.AddRow();
+		Table.SetCell("Command", "DelServer");
+		Table.SetCell("Arguments", "<host> [port] [pass]");
+		Table.SetCell("Description", "Remove a server from the list of alternate/backup servers of current IRC network");
 	}
-
-	Table.AddRow();
-	Table.SetCell("Command", "JumpNetwork");
-	Table.SetCell("Arguments", "<network>");
-	Table.SetCell("Description", "Jump to another network");
-
-	Table.AddRow();
-	Table.SetCell("Command", "AddServer");
-	Table.SetCell("Arguments", "<host> [[+]port] [pass]");
-	Table.SetCell("Description", "Add a server to the list of alternate/backup servers of current IRC network.");
-
-	Table.AddRow();
-	Table.SetCell("Command", "DelServer");
-	Table.SetCell("Arguments", "<host> [port] [pass]");
-	Table.SetCell("Description", "Remove a server from the list of alternate/backup servers of current IRC network");
 
 	Table.AddRow();
 	Table.SetCell("Command", "Enablechan");
 	Table.SetCell("Arguments", "<#chan>");
 	Table.SetCell("Description", "Enable the channel");
-
-	Table.AddRow();
-	Table.SetCell("Command", "Disablechan");
-	Table.SetCell("Arguments", "<#chan>");
-	Table.SetCell("Description", "Disable the channel");
 
 	Table.AddRow();
 	Table.SetCell("Command", "Detach");

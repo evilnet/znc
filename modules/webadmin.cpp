@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,7 +101,6 @@ public:
 		CString sArgs(sArgStr);
 		CString sPort;
 		CString sListenHost;
-		CString sURIPrefix;
 
 		while (sArgs.Left(1) == "-") {
 			CString sOpt = sArgs.Token(0);
@@ -151,7 +150,7 @@ public:
 		}
 
 		// Now turn that into a listener instance
-		CListener *pListener = new CListener(uPort, sListenHost, sURIPrefix, bSSL,
+		CListener *pListener = new CListener(uPort, sListenHost, bSSL,
 				(!bIPv6 ? ADDR_IPV4ONLY : ADDR_ALL), CListener::ACCEPT_HTTP);
 
 		if (!pListener->Listen()) {
@@ -447,17 +446,17 @@ public:
 			return NetworkPage(WebSock, Tmpl, pNetwork->GetUser(), pNetwork);
 
 		} else if (sPageName == "delnetwork") {
+        	// Admin||Self Check
+			if (!spSession->IsAdmin()) {
+				return false;
+			}
+            
 			CString sUser = WebSock.GetParam("user");
 			if (sUser.empty() && !WebSock.IsPost()) {
 				sUser = WebSock.GetParam("user", false);
 			}
 
 			CUser* pUser = CZNC::Get().FindUser(sUser);
-
-			// Admin||Self Check
-			if (!spSession->IsAdmin() && (!spSession->GetUser() || spSession->GetUser() != pUser)) {
-				return false;
-			}
 
 			return DelNetwork(WebSock, pUser, Tmpl);
 		} else if (sPageName == "editchan") {
@@ -543,7 +542,7 @@ public:
 				WebSock.PrintErrorPage("Please don't delete yourself, suicide is not the answer!");
 				return true;
 			} else if (CZNC::Get().DeleteUser(sUser)) {
-				WebSock.Redirect(GetWebPath() + "listusers");
+				WebSock.Redirect("listusers");
 				return true;
 			}
 
@@ -711,7 +710,7 @@ public:
 			return true;
 		}
 
-		WebSock.Redirect(GetWebPath() + "editnetwork?user=" + pUser->GetUserName().Escape_n(CString::EURL) + "&network=" + pNetwork->GetName().Escape_n(CString::EURL));
+		WebSock.Redirect("editnetwork?user=" + pUser->GetUserName().Escape_n(CString::EURL) + "&network=" + pNetwork->GetName().Escape_n(CString::EURL));
 		return true;
 	}
 
@@ -796,11 +795,13 @@ public:
 
 				Tmpl["IRCConnectEnabled"] = CString(pNetwork->GetIRCConnectEnabled());
 
-				const vector<CServer*>& vServers = pNetwork->GetServers();
-				for (unsigned int a = 0; a < vServers.size(); a++) {
-					CTemplate& l = Tmpl.AddRow("ServerLoop");
-					l["Server"] = vServers[a]->GetString();
-				}
+                if (spSession->IsAdmin()) {
+				    const vector<CServer*>& vServers = pNetwork->GetServers();
+				    for (unsigned int a = 0; a < vServers.size(); a++) {
+					    CTemplate& l = Tmpl.AddRow("ServerLoop");
+					    l["Server"] = vServers[a]->GetString();
+				    }
+                }
 
 				const vector<CChan*>& Channels = pNetwork->GetChans();
 				for (unsigned int c = 0; c < Channels.size(); c++) {
@@ -822,7 +823,7 @@ public:
 				}
 			} else {
 				if (!spSession->IsAdmin() && !pUser->HasSpaceForNewNetwork()) {
-					WebSock.PrintErrorPage("Network number limit reached. Ask an admin to increase the limit for you, or delete unneeded networks from Your Settings.");
+					WebSock.PrintErrorPage("Network number limit reached. Ask an admin to increase the limit for you, or delete few old ones from Your Settings");
 					return true;
 				}
 
@@ -985,7 +986,7 @@ public:
 			return true;
 		}
 
-		WebSock.Redirect(GetWebPath() + "edituser?user=" + pUser->GetUserName().Escape_n(CString::EURL));
+		WebSock.Redirect("edituser?user=" + pUser->GetUserName().Escape_n(CString::EURL));
 		return true;
 	}
 
@@ -1021,7 +1022,7 @@ public:
 			return true;
 		}
 
-		WebSock.Redirect(GetWebPath() + "edituser?user=" + pUser->GetUserName().Escape_n(CString::EURL));
+		WebSock.Redirect("edituser?user=" + pUser->GetUserName().Escape_n(CString::EURL));
 		return false;
 	}
 
@@ -1041,7 +1042,7 @@ public:
 			return true;
 		}
 
-		WebSock.Redirect(GetWebPath() + "editnetwork?user=" + pNetwork->GetUser()->GetUserName().Escape_n(CString::EURL) + "&network=" + pNetwork->GetName().Escape_n(CString::EURL));
+		WebSock.Redirect("editnetwork?user=" + pNetwork->GetUser()->GetUserName().Escape_n(CString::EURL) + "&network=" + pNetwork->GetName().Escape_n(CString::EURL));
 		return false;
 	}
 
@@ -1100,7 +1101,7 @@ public:
 					l["IRCNick"] = vNetworks[a]->GetIRCNick().GetNick();
 					CServer* pServer = vNetworks[a]->GetCurrentServer();
 					if (pServer) {
-						l["Server"] = pServer->GetName() + ":" + (pServer->IsSSL() ? "+" : "") + CString(pServer->GetPort());
+						l["Server"] = pServer->GetName();
 					}
 				}
 
@@ -1321,9 +1322,9 @@ public:
 		}
 
 		if (!spSession->IsAdmin()) {
-			WebSock.Redirect(GetWebPath() + "edituser");
+			WebSock.Redirect("edituser");
 		} else {
-			WebSock.Redirect(GetWebPath() + "listusers");
+			WebSock.Redirect("listusers");
 		}
 
 		/* we don't want the template to be printed while we redirect */
@@ -1421,7 +1422,6 @@ public:
 	bool AddListener(CWebSock& WebSock, CTemplate& Tmpl) {
 		unsigned short uPort = WebSock.GetParam("port").ToUShort();
 		CString sHost = WebSock.GetParam("host");
-		CString sURIPrefix = WebSock.GetParam("uriprefix");
 		if (sHost == "*") sHost = "";
 		bool bSSL = WebSock.GetParam("ssl").ToBool();
 		bool bIPv4 = WebSock.GetParam("ipv4").ToBool();
@@ -1462,7 +1462,7 @@ public:
 		}
 
 		CString sMessage;
-		if (CZNC::Get().AddListener(uPort, sHost, sURIPrefix, bSSL, eAddr, eAccept, sMessage)) {
+		if (CZNC::Get().AddListener(uPort, sHost, bSSL, eAddr, eAccept, sMessage)) {
 			if (!sMessage.empty()) {
 				WebSock.GetSession()->AddSuccess(sMessage);
 			}
@@ -1546,8 +1546,6 @@ public:
 
 				l["IsWeb"] = CString(pListener->GetAcceptType() != CListener::ACCEPT_IRC);
 				l["IsIRC"] = CString(pListener->GetAcceptType() != CListener::ACCEPT_HTTP);
-
-				l["URIPrefix"] = pListener->GetURIPrefix() + "/";
 
 				// simple protection for user from shooting his own foot
 				// TODO check also for hosts/families
@@ -1692,7 +1690,7 @@ public:
 			WebSock.GetSession()->AddError("Settings changed, but config was not written");
 		}
 
-		WebSock.Redirect(GetWebPath() + "settings");
+		WebSock.Redirect("settings");
 		/* we don't want the template to be printed while we redirect */
 		return false;
 	}

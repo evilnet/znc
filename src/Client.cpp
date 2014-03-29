@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <znc/User.h>
 #include <znc/IRCNetwork.h>
 
-using std::map;
 using std::vector;
 
 #define CALLMOD(MOD, CLIENT, USER, NETWORK, FUNC) {  \
@@ -117,18 +116,27 @@ void CClient::ReadLine(const CString& sData) {
 
 			CString sAuthLine = sLine.Token(1, true).TrimPrefix_n();
 
-			// [user[/network]:]password
-			if (sAuthLine.find(":") == CString::npos) {
+			// [[network][/user/]]password
+			if (sAuthLine.find("/") == CString::npos) {
 				m_sPass = sAuthLine;
-				sAuthLine = "";
 			} else {
-				m_sPass = sAuthLine.Token(1, true, ":");
-				sAuthLine = sAuthLine.Token(0, false, ":");
-			}
-
-			if (!sAuthLine.empty()) {
-				m_sUser = sAuthLine.Token(0, false, "/");
-				m_sNetwork = sAuthLine.Token(1, true, "/");
+				VCString vsAuthLine;
+				sAuthLine.Split("/", vsAuthLine, false);
+ 
+				switch (vsAuthLine.size()) {
+				case 2:
+					m_sUser = vsAuthLine[0];
+					m_sPass = vsAuthLine[1];
+					break;
+				case 3:
+					m_sNetwork = vsAuthLine[0];
+					m_sUser = vsAuthLine[1];
+					m_sPass = vsAuthLine[2];
+					break;
+				default:
+					m_sPass = sAuthLine;
+					break;
+				}
 			}
 
 			AuthUser();
@@ -674,7 +682,6 @@ void CClient::AcceptLogin(CUser& User) {
 	SetTimeout(540, TMO_READ);
 
 	SetSockName("USR::" + m_pUser->GetUserName());
-	SetEncoding(m_pUser->GetClientEncoding());
 
 	if (!m_sNetwork.empty()) {
 		m_pNetwork = m_pUser->FindNetwork(m_sNetwork);
@@ -754,12 +761,8 @@ CString CClient::GetFullName() {
 }
 
 void CClient::PutClient(const CString& sLine) {
-	bool bReturn = false;
-	CString sCopy = sLine;
-	ALLMODULECALL(OnSendToClient(sCopy, *this), &bReturn);
-	if (bReturn) return;
-	DEBUG("(" << GetFullName() << ") ZNC -> CLI [" << sCopy << "]");
-	Write(sCopy + "\r\n");
+	DEBUG("(" << GetFullName() << ") ZNC -> CLI [" << sLine << "]");
+	Write(sLine + "\r\n");
 }
 
 void CClient::PutStatusNotice(const CString& sLine) {
@@ -933,6 +936,6 @@ void CClient::HandleCap(const CString& sLine)
 		}
 		RespondCap("ACK :" + sList.TrimSuffix_n(" "));
 	} else {
-		PutClient(":irc.znc.in 410 " + GetNick() + " " + sSubCmd + " :Invalid CAP subcommand");
+		PutClient(":irc.znc.in 410 " + GetNick() + " :Invalid CAP subcommand");
 	}
 }

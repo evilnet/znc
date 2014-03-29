@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,8 @@ public:
 	virtual void SockError(int iErrno, const CString& sDescription);
 	virtual void Timeout();
 	virtual void ReachedMaxBuffer();
+	
+	void Register();
 
 	void PutIRC(const CString& sLine);
 	void PutIRCQuick(const CString& sLine); //!< Should be used for PONG only

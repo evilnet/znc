@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  * Copyright (C) 2008 Heiko Hund <heiko@ist.eigentlich.net>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,14 +22,18 @@
  */
 
 #include <znc/znc.h>
+#include <znc/IRCNetwork.h>
 #include <znc/User.h>
+#include <znc/MD5.h>
 
 #include <sasl/sasl.h>
+#include <sstream>
 
 class CSASLAuthMod : public CModule {
 public:
 	MODCONSTRUCTOR(CSASLAuthMod) {
 		m_Cache.SetTTL(60000/*ms*/);
+		m_bWebIrcEnabled = false;
 
 		AddHelpCommand();
 		AddCommand("CreateUser",       static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::CreateUserCommand),
@@ -37,6 +41,35 @@ public:
 		AddCommand("CloneUser",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::CloneUserCommand),
 			"[username]");
 		AddCommand("DisableCloneUser", static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::DisableCloneUserCommand));
+		AddCommand("SetImpersonateAccount",         static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetImpersonateAccount),
+			"username password", "Set the username and password for the SASL Impersonaton Account");
+		AddCommand("SetWebIrc",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetWebIrc),
+			"username password", "Set the username and password for WebIRC");
+		AddCommand("SetUserSalt",      static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetUserSalt),
+			"salt", "Set the salt used when hashing usernames");
+	}
+
+	void SetImpersonateAccount(const CString& sLine) {
+		SetNV("impersonationusername", sLine.Token(1));
+		SetNV("impersonationpassword", sLine.Token(2));
+
+		PutModule("SASL Impersonaton Account Username has been set to [" + GetNV("impersonationusername") + "]");
+		PutModule("SASL Impersonaton Account Password has been set to [" + GetNV("impersonationpassword") + "]");
+	}
+
+	void SetWebIrc(const CString& sLine) {
+		SetNV("webircusername", sLine.Token(1));
+		SetNV("webircpassword", sLine.Token(2));
+
+		PutModule("WebIRC Username has been set to [" + GetNV("webircusername") + "]");
+		PutModule("WebIRC Password has been set to [" + GetNV("webircpassword") + "]");
+	}
+	
+	void SetUserSalt(const CString& sLine) {
+		SetNV("usersalt", sLine.Token(1));
+
+		PutModule("User salt has been set to [" + GetNV("usersalt") + "]");
+
 	}
 
 	virtual ~CSASLAuthMod() {
@@ -60,8 +93,14 @@ public:
 			if (it->Equals("saslauthd") || it->Equals("auxprop")) {
 				m_sMethod += *it + " ";
 			} else {
-				CUtils::PrintError("Ignoring invalid SASL pwcheck method: " + *it);
-				sMessage = "Ignored invalid SASL pwcheck method";
+				if (it->Equals("webirc")) {
+					m_bWebIrcEnabled = true;
+				} else if (it->Equals("impersonation")) {
+					m_bSaslImpersonateEnabled = true;
+				} else {
+					CUtils::PrintError("Ignoring invalid SASL pwcheck method: " + *it);
+					sMessage = "Ignored invalid SASL pwcheck method";
+				}
 			}
 		}
 
@@ -101,12 +140,12 @@ public:
 		const CString sCacheKey(CString(sUsername + ":" + sPassword).MD5());
 		if (m_Cache.HasItem(sCacheKey)) {
 			bSuccess = true;
-			DEBUG("saslauth: Found [" + sUsername + "] in cache");
+			DEBUG("cyrusauth: Found [" + sUsername + "] in cache");
 		} else if (sasl_server_new("znc", NULL, NULL, NULL, NULL, m_cbs, 0, &sasl_conn) == SASL_OK &&
 				sasl_checkpass(sasl_conn, sUsername.c_str(), sUsername.size(), sPassword.c_str(), sPassword.size()) == SASL_OK) {
 			m_Cache.AddItem(sCacheKey);
 
-			DEBUG("saslauth: Successful SASL authentication [" + sUsername + "]");
+			DEBUG("cyrusauth: Successful SASL authentication [" + sUsername + "]");
 
 			bSuccess = true;
 		}
@@ -122,28 +161,59 @@ public:
 					CUser *pBaseUser = CZNC::Get().FindUser(CloneUser());
 
 					if (!pBaseUser) {
-						DEBUG("saslauth: Clone User [" << CloneUser() << "] User not found");
+						DEBUG("cyrusauth: Clone User [" << CloneUser() << "] User not found");
 						delete pUser;
 						pUser = NULL;
 					}
 
 					if (pUser && !pUser->Clone(*pBaseUser, sErr)) {
-						DEBUG("saslauth: Clone User [" << CloneUser() << "] failed: " << sErr);
+						DEBUG("cyrusauth: Clone User [" << CloneUser() << "] failed: " << sErr);
 						delete pUser;
 						pUser = NULL;
 					}
 				}
 
-				if (pUser) {
-					// "::" is an invalid MD5 hash, so user won't be able to login by usual method
-					pUser->SetPass("::", CUser::HASH_MD5, "::");
-				}
+				pUser->SetNick(sUsername);
+				pUser->SetAltNick(sUsername + "_");
+				pUser->SetIdent(sUsername);
+				pUser->SetRealName(sUsername);
 
-				if (pUser && !CZNC::Get().AddUser(pUser, sErr)) {
-					DEBUG("saslauth: Add user [" << sUsername << "] failed: " << sErr);
-					delete pUser;
-					pUser = NULL;
+				CString sAddNetworkError;
+				CIRCNetwork* pNetwork = pUser->AddNetwork("AfterNET", sAddNetworkError);
+
+				if (pNetwork) {
+					pNetwork->AddServer("localhost", 6697, "", true);
+
+					if (pUser) {
+						// "::" is an invalid MD5 hash, so user won't be able to login by usual method
+						pUser->SetPass("::", CUser::HASH_MD5, "::");
+					}
+
+					if (pUser && !CZNC::Get().AddUser(pUser, sErr)) {
+						DEBUG("cyrusauth: Add user [" << sUsername << "] failed: " << sErr);
+						delete pUser;
+						pUser = NULL;
+					}
+
+					if (m_bSaslImpersonateEnabled) {
+						CString sModRet;
+
+						if (pNetwork->GetModules().LoadModule("sasl", "", CModInfo::NetworkModule, pUser, pNetwork, sModRet))
+						{
+							CModule* pModule = pNetwork->GetModules().FindModule("sasl");
+							if (pModule) {
+								pModule->SetNV("saslimpersonation", "yes");
+								pModule->SetNV("impersonationuser", sUsername);
+								pModule->SetNV("username", GetNV("impersonationusername"));
+								pModule->SetNV("password", GetNV("impersonationpassword"));
+								pModule->SetNV("require_auth", "yes");
+								pModule->SetNV("mechanisms", "PLAIN");
+							}
+						}
+						else DEBUG("cyrusauth: Failure loading sasl module for created user [" << sUsername << "] ");
+					}
 				}
+				else DEBUG("cyrusauth: Failure adding network for created user [" << sUsername << "]: " << sAddNetworkError);
 			}
 
 			if (pUser) {
@@ -151,7 +221,35 @@ public:
 				return HALT;
 			}
 		}
+		return CONTINUE;
+	}
 
+	virtual EModRet OnIRCRegistration(CString& sPass, CString& sNick,
+									  CString& sIdent, CString& sRealName)
+	{
+		if (m_bWebIrcEnabled) {
+			CUser* pUser = CModule::GetUser();
+			CIRCNetwork* pNetwork = CModule::GetNetwork();
+		
+			if (pUser != NULL && !(pNetwork->GetName().CaseCmp("afternet"))) {
+				if (!(pUser->GetUserName().StrCmp("MrLenin")))
+					return CONTINUE;
+
+				std::ostringstream sWebIrcMsg;
+				CString sUsername = pUser->GetUserName();
+				CMD5 md5(sUsername + GetNV("usersalt"));
+				uint8* hashBytes = downsample(md5.GetHash());
+				unsigned int hashInts[3] = { hashBytes[0], hashBytes[1], hashBytes[2] };
+
+				sWebIrcMsg << "WEBIRC " << GetNV("webircpassword") << " " << GetNV("webircusername") << " " << sUsername <<
+					".Users.AfterNET.Org 255." << hashInts[0] << "." << hashInts[1] << "." << hashInts[2];
+
+				CModule::PutIRC(sWebIrcMsg.str());
+            
+				delete[] hashBytes;
+			}
+		}
+		
 		return CONTINUE;
 	}
 
@@ -207,6 +305,8 @@ protected:
 
 	sasl_callback_t m_cbs[2];
 	CString m_sMethod;
+	bool m_bWebIrcEnabled;
+	bool m_bSaslImpersonateEnabled;
 
 	static int getopt(void *context, const char *plugin_name,
 			const char *option, const char **result, unsigned *len) {
@@ -217,12 +317,27 @@ protected:
 
 		return SASL_CONTINUE;
 	}
+
+	/** Downsamples a 128bit result to 32bits (md5 -> unsigned int).
+	 * @param[in] i 128bit result to downsample.
+	 * @return downsampled result.
+
+	 */
+	static inline uint8* downsample(unsigned char *i)
+	{
+		uint8* r = new uint8[3];
+		r[0] = i[0] ^ i[1] ^ i[2] ^ i[3] ^ i[4];
+		r[1] = i[5] ^ i[6] ^ i[7] ^ i[8] ^ i[9];
+		r[2] = i[10] ^ i[11] ^ i[12] ^ i[13] ^ i[14] ^ i[15];
+	
+		return r;
+	}
 };
 
 template<> void TModInfo<CSASLAuthMod>(CModInfo& Info) {
 	Info.SetWikiPage("cyrusauth");
 	Info.SetHasArgs(true);
-	Info.SetArgsHelpText("This global module takes up to two arguments - the methods of authentication - auxprop and saslauthd");
+	Info.SetArgsHelpText("This global module takes up to four arguments - the methods of authentication - auxprop and saslauthd - and optionally, if WebIRC host spoofing and/or SASL Impersonation is to be enabled - webirc and impersonation");
 }
 
 GLOBALMODULEDEFS(CSASLAuthMod, "Allow users to authenticate via SASL password verification method")

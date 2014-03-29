@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2014 ZNC, see the NOTICE file for details.
+ * Copyright (C) 2004-2013 ZNC, see the NOTICE file for details.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,6 @@ CIRCSock::CIRCSock(CIRCNetwork* pNetwork) : CZNCSock() {
 	EnableReadLine();
 	m_Nick.SetIdent(m_pNetwork->GetIdent());
 	m_Nick.SetHost(m_pNetwork->GetBindHost());
-	SetEncoding(m_pNetwork->GetEncoding());
 
 	m_uMaxNickLen = 9;
 	m_uCapPaused = 0;
@@ -841,6 +840,7 @@ void CIRCSock::SendNextCap() {
 		if (m_ssPendingCaps.empty()) {
 			// We already got all needed ACK/NAK replies.
 			PutIRC("CAP END");
+			Register();
 		} else {
 			CString sCap = *m_ssPendingCaps.begin();
 			m_ssPendingCaps.erase(m_ssPendingCaps.begin());
@@ -1040,13 +1040,8 @@ void CIRCSock::TrySend() {
 	// This condition must be the same as in PutIRC() and PutIRCQuick()!
 	while (!m_vsSendQueue.empty() && (!m_bFloodProtection || m_iSendsAllowed > 0)) {
 		m_iSendsAllowed--;
-		bool bSkip = false;
-		CString& sLine = m_vsSendQueue.front();
-		ALLMODULECALL(OnSendToIRC(sLine), &bSkip);
-		if (!bSkip) {;
-			DEBUG("(" << m_pNetwork->GetUser()->GetUserName() << "/" << m_pNetwork->GetName() << ") ZNC -> IRC [" << sLine << "]");
-			Write(sLine + "\r\n");
-		}
+		DEBUG("(" << m_pNetwork->GetUser()->GetUserName() << "/" << m_pNetwork->GetName() << ") ZNC -> IRC [" << m_vsSendQueue.front() << "]");
+		Write(m_vsSendQueue.front() + "\r\n");
 		m_vsSendQueue.pop_front();
 	}
 }
@@ -1058,7 +1053,12 @@ void CIRCSock::SetNick(const CString& sNick) {
 
 void CIRCSock::Connected() {
 	DEBUG(GetSockName() << " == Connected()");
+	PutIRC("CAP LS");
+}
 
+void CIRCSock::Register() {
+	DEBUG(GetSockName() << " == Register()");
+	
 	CString sPass = m_sPass;
 	CString sNick = m_pNetwork->GetNick();
 	CString sIdent = m_pNetwork->GetIdent();
@@ -1068,12 +1068,9 @@ void CIRCSock::Connected() {
 	IRCSOCKMODULECALL(OnIRCRegistration(sPass, sNick, sIdent, sRealName), &bReturn);
 	if (bReturn) return;
 
-	PutIRC("CAP LS");
-
-	if (!sPass.empty()) {
+	if (!sPass.empty())
 		PutIRC("PASS " + sPass);
-	}
-
+	
 	PutIRC("NICK " + sNick);
 	PutIRC("USER " + sIdent + " \"" + sIdent + "\" \"" + sIdent + "\" :" + sRealName);
 
