@@ -45,6 +45,8 @@ public:
 			"username password", "Set the username and password for the SASL Impersonaton Account");
 		AddCommand("SetWebIrc",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetWebIrc),
 			"username password", "Set the username and password for WebIRC");
+		AddCommand("SetWebIrcHost",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetWebIrcHost),
+			"hostname", "Set the hostname used for WebIRC");
 		AddCommand("SetUserSalt",      static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetUserSalt),
 			"salt", "Set the salt used when hashing usernames");
 		AddCommand("SetNetworkName",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetNetworkName),
@@ -81,6 +83,12 @@ public:
 
 		PutModule("WebIRC Username has been set to [" + GetNV("webircusername") + "]");
 		PutModule("WebIRC Password has been set to [" + GetNV("webircpassword") + "]");
+	}
+	
+	void SetWebIrcHost(const CString& sLine) {
+		SetNV("webirchost", sLine);
+
+		PutModule("WebIRC hostname has been set to [" + GetNV("webirchost") + "]");
 	}
 	
 	void SetUserSalt(const CString& sLine) {
@@ -249,7 +257,7 @@ public:
 			CUser* pUser = CModule::GetUser();
 			CIRCNetwork* pNetwork = CModule::GetNetwork();
 		
-			if (pUser != NULL && !(pNetwork->GetName().CaseCmp("afternet"))) {
+			if (pUser != NULL && !(pNetwork->GetName().CaseCmp(GetNV("networkname")))) {
 				if (!(pUser->GetUserName().StrCmp("MrLenin")))
 					return CONTINUE;
 
@@ -260,7 +268,7 @@ public:
 				unsigned int hashInts[3] = { hashBytes[0], hashBytes[1], hashBytes[2] };
 
 				sWebIrcMsg << "WEBIRC " << GetNV("webircpassword") << " " << GetNV("webircusername") << " " << sUsername <<
-					".Users.AfterNET.Org 255." << hashInts[0] << "." << hashInts[1] << "." << hashInts[2];
+					GetNV("webirchost") << " 255." << hashInts[0] << "." << hashInts[1] << "." << hashInts[2];
 
 				CModule::PutIRC(sWebIrcMsg.str());
             
