@@ -795,13 +795,13 @@ public:
 
 				Tmpl["IRCConnectEnabled"] = CString(pNetwork->GetIRCConnectEnabled());
 
-                if (spSession->IsAdmin()) {
-				    const vector<CServer*>& vServers = pNetwork->GetServers();
-				    for (unsigned int a = 0; a < vServers.size(); a++) {
-					    CTemplate& l = Tmpl.AddRow("ServerLoop");
-					    l["Server"] = vServers[a]->GetString();
-				    }
-                }
+				if (spSession->IsAdmin()) {
+					const vector<CServer*>& vServers = pNetwork->GetServers();
+					for (unsigned int a = 0; a < vServers.size(); a++) {
+						CTemplate& l = Tmpl.AddRow("ServerLoop");
+						l["Server"] = vServers[a]->GetString();
+					}
+				}
 
 				const vector<CChan*>& Channels = pNetwork->GetChans();
 				for (unsigned int c = 0; c < Channels.size(); c++) {
@@ -912,10 +912,14 @@ public:
 
 		VCString vsArgs;
 
-		pNetwork->DelServers();
-		WebSock.GetRawParam("servers").Split("\n", vsArgs);
-		for (unsigned int a = 0; a < vsArgs.size(); a++) {
-			pNetwork->AddServer(vsArgs[a].Trim_n());
+		if (spSession->IsAdmin()) {
+			WebSock.GetRawParam("servers").Split("\n", vsArgs);
+			if (vsArgs.size()) {
+			pNetwork->DelServers();
+				for (unsigned int a = 0; a < vsArgs.size(); a++) {
+					pNetwork->AddServer(vsArgs[a].Trim_n());
+				}
+			}
 		}
 
 		WebSock.GetParamValues("channel", vsArgs);
