@@ -969,8 +969,26 @@ public:
 			}
 		}
 
+		CString sModUnloadError;
+		CModule* pModule;
+		
 		for (set<CString>::iterator it2 = ssUnloadMods.begin(); it2 != ssUnloadMods.end(); ++it2) {
+			if (!it2->CaseCmp("sasl")) {
+				pModule = pNetwork->GetModules().FindModule("sasl");
+				
+				if (pModule) {
+					if (pModule->GetNV("saslimpersonation").ToBool()) {
+						sModUnloadError = "Unable to unload module [sasl] SaslImpersonation enabled.";
+						continue;
+					}
+				}
+			}
 			pNetwork->GetModules().UnloadModule(*it2);
+		}
+		
+		if (!sModUnloadError.empty()) {
+			DEBUG(sModUnloadError);
+			WebSock.GetSession()->AddError(sModUnloadError);
 		}
 
 		CTemplate TmplMod;

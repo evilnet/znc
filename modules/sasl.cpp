@@ -16,6 +16,7 @@
 
 #include <znc/IRCNetwork.h>
 #include <znc/IRCSock.h>
+#include <znc/User.h>
 
 #ifdef HAVE_LIBSSL
 #define HAVE_SASL_MECHANISM
@@ -552,6 +553,7 @@ public:
 	virtual void OnIRCDisconnected() {
 		m_bAuthenticated = false;
 	}
+	
 private:
 	Mechanisms m_Mechanisms;
 	bool m_bAuthenticated;

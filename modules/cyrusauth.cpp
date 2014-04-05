@@ -47,6 +47,24 @@ public:
 			"username password", "Set the username and password for WebIRC");
 		AddCommand("SetUserSalt",      static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetUserSalt),
 			"salt", "Set the salt used when hashing usernames");
+		AddCommand("SetNetworkName",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetNetworkName),
+			"network", "Set the network name used for newly created accounts");
+		AddCommand("SetServer",        static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetServer),
+			"server port ssl", "Set the server and port used for newly created accounts");
+	}
+	
+	void SetServer(const CString& sLine) {
+		SetNV("server", sLine.Token(1));
+		SetNV("port", sLine.Token(2));
+		SetNV("ssl", sLine.Token(3));
+
+		PutModule("Server and port used for newly created accounts has been set to [" + GetNV("server") + ":" + (GetNV("ssl").ToBool() ? "+" + GetNV("port") : GetNV("port")) + "]");
+	}
+	
+	void SetNetworkName(const CString& sLine) {
+		SetNV("networkname", sLine.Token(1));
+
+		PutModule("Network name used for newly created accounts has been set to [" + GetNV("networkname") + "]");
 	}
 
 	void SetImpersonateAccount(const CString& sLine) {
@@ -179,10 +197,10 @@ public:
 				pUser->SetRealName(sUsername);
 
 				CString sAddNetworkError;
-				CIRCNetwork* pNetwork = pUser->AddNetwork("AfterNET", sAddNetworkError);
+				CIRCNetwork* pNetwork = pUser->AddNetwork(GetNV("networkname"), sAddNetworkError);
 
 				if (pNetwork) {
-					pNetwork->AddServer("localhost", 6697, "", true);
+					pNetwork->AddServer(GetNV("server"), GetNV("port").ToUShort(), "", GetNV("ssl").ToBool());
 
 					if (pUser) {
 						// "::" is an invalid MD5 hash, so user won't be able to login by usual method
