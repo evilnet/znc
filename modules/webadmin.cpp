@@ -466,17 +466,17 @@ public:
 			return NetworkPage(WebSock, Tmpl, pNetwork->GetUser(), pNetwork);
 
 		} else if (sPageName == "delnetwork") {
+        	// Admin||Self Check
+			if (!spSession->IsAdmin()) {
+				return false;
+			}
+            
 			CString sUser = WebSock.GetParam("user");
 			if (sUser.empty() && !WebSock.IsPost()) {
 				sUser = WebSock.GetParam("user", false);
 			}
 
 			CUser* pUser = CZNC::Get().FindUser(sUser);
-
-			// Admin||Self Check
-			if (!spSession->IsAdmin() && (!spSession->GetUser() || spSession->GetUser() != pUser)) {
-				return false;
-			}
 
 			return DelNetwork(WebSock, pUser, Tmpl);
 		} else if (sPageName == "editchan") {
@@ -860,10 +860,12 @@ public:
 
 				breadNet["Text"] = "Edit Network [" + pNetwork->GetName() + "]";
 
+				if (spSession->IsAdmin()) {
 				const vector<CServer*>& vServers = pNetwork->GetServers();
 				for (unsigned int a = 0; a < vServers.size(); a++) {
 					CTemplate& l = Tmpl.AddRow("ServerLoop");
 					l["Server"] = vServers[a]->GetString();
+				}
 				}
 
 				const vector<CChan*>& Channels = pNetwork->GetChans();
@@ -1034,10 +1036,14 @@ public:
 
 		VCString vsArgs;
 
+		if (spSession->IsAdmin()) {
+			WebSock.GetRawParam("servers").Split("\n", vsArgs);
+			if (vsArgs.size()) {
 		pNetwork->DelServers();
-		WebSock.GetRawParam("servers").Split("\n", vsArgs);
 		for (unsigned int a = 0; a < vsArgs.size(); a++) {
 			pNetwork->AddServer(vsArgs[a].Trim_n());
+		}
+			}
 		}
 
 		WebSock.GetRawParam("fingerprints").Split("\n", vsArgs);
@@ -1099,8 +1105,26 @@ public:
 			}
 		}
 
+		CString sModUnloadError;
+		CModule* pModule;
+		
 		for (set<CString>::iterator it2 = ssUnloadMods.begin(); it2 != ssUnloadMods.end(); ++it2) {
+			if (!it2->CaseCmp("sasl")) {
+				pModule = pNetwork->GetModules().FindModule("sasl");
+				
+				if (pModule) {
+					if (pModule->GetNV("saslimpersonation").ToBool()) {
+						sModUnloadError = "Unable to unload module [sasl] SaslImpersonation enabled.";
+						continue;
+					}
+				}
+			}
 			pNetwork->GetModules().UnloadModule(*it2);
+		}
+		
+		if (!sModUnloadError.empty()) {
+			DEBUG(sModUnloadError);
+			WebSock.GetSession()->AddError(sModUnloadError);
 		}
 
 		CTemplate TmplMod;

@@ -63,6 +63,8 @@ public:
 	virtual void SockError(int iErrno, const CString& sDescription);
 	virtual void Timeout();
 	virtual void ReachedMaxBuffer();
+	
+	void Register();
 
 	void PutIRC(const CString& sLine);
 	void PutIRCQuick(const CString& sLine); //!< Should be used for PONG only
