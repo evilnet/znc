@@ -844,6 +844,7 @@ void CIRCSock::SendNextCap() {
 		if (m_ssPendingCaps.empty()) {
 			// We already got all needed ACK/NAK replies.
 			PutIRC("CAP END");
+			Register();
 		} else {
 			CString sCap = *m_ssPendingCaps.begin();
 			m_ssPendingCaps.erase(m_ssPendingCaps.begin());
@@ -1091,7 +1092,12 @@ void CIRCSock::SetNick(const CString& sNick) {
 
 void CIRCSock::Connected() {
 	DEBUG(GetSockName() << " == Connected()");
+	PutIRC("CAP LS");
+}
 
+void CIRCSock::Register() {
+	DEBUG(GetSockName() << " == Register()");
+	
 	CString sPass = m_sPass;
 	CString sNick = m_pNetwork->GetNick();
 	CString sIdent = m_pNetwork->GetIdent();
@@ -1101,12 +1107,9 @@ void CIRCSock::Connected() {
 	IRCSOCKMODULECALL(OnIRCRegistration(sPass, sNick, sIdent, sRealName), &bReturn);
 	if (bReturn) return;
 
-	PutIRC("CAP LS");
-
-	if (!sPass.empty()) {
+	if (!sPass.empty())
 		PutIRC("PASS " + sPass);
-	}
-
+	
 	PutIRC("NICK " + sNick);
 	PutIRC("USER " + sIdent + " \"" + sIdent + "\" \"" + sIdent + "\" :" + sRealName);
 

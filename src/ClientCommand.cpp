@@ -533,6 +533,11 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus(sNetworkAddError);
 		}
 	} else if (sCommand.Equals("DELNETWORK")) {
+        if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to remove a Network. Ask an admin to remove the network for you.");
+			return;
+		}
+        
 		CString sNetwork = sLine.Token(1);
 
 		if (sNetwork.empty()) {
@@ -691,6 +696,11 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus("You don't have a network named " + sNetwork);
 		}
 	} else if (sCommand.Equals("ADDSERVER")) {
+		if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to add a Server. Ask an admin to add the server for you.");
+			return;
+		}
+        
 		CString sServer = sLine.Token(1);
 
 		if (!m_pNetwork) {
@@ -710,6 +720,11 @@ void CClient::UserCommand(CString& sLine) {
 			PutStatus("Perhaps the server is already added or openssl is disabled?");
 		}
 	} else if (sCommand.Equals("REMSERVER") || sCommand.Equals("DELSERVER")) {
+        if (!m_pUser->IsAdmin()) {
+			PutStatus("Administrative access required to remove a Server. Ask an admin to remove the server for you.");
+			return;
+		}
+        
 		if (!m_pNetwork) {
 			PutStatus("You must be connected with a network to use this command");
 			return;
@@ -1080,6 +1095,7 @@ void CClient::UserCommand(CString& sLine) {
 		}
 
 		CString sModRet;
+		CModule* pModule;
 
 		switch (eType) {
 		case CModInfo::GlobalModule:
@@ -1089,6 +1105,16 @@ void CClient::UserCommand(CString& sLine) {
 			m_pUser->GetModules().UnloadModule(sMod, sModRet);
 			break;
 		case CModInfo::NetworkModule:
+			if (!sMod.CaseCmp("sasl")) {
+				pModule = m_pNetwork->GetModules().FindModule("sasl");
+				
+				if (pModule) {
+					if (pModule->GetNV("saslimpersonation").ToBool()) {
+						PutStatus("Unable to unload module [sasl] SaslImpersonation enabled.");
+						return;
+					}
+				}
+			}
 			m_pNetwork->GetModules().UnloadModule(sMod, sModRet);
 			break;
 		default:
@@ -1150,6 +1176,7 @@ void CClient::UserCommand(CString& sLine) {
 		}
 
 		CString sModRet;
+		CModule* pModule;
 
 		switch (eType) {
 		case CModInfo::GlobalModule:
@@ -1159,6 +1186,16 @@ void CClient::UserCommand(CString& sLine) {
 			m_pUser->GetModules().ReloadModule(sMod, sArgs, m_pUser, NULL, sModRet);
 			break;
 		case CModInfo::NetworkModule:
+			if (!sMod.CaseCmp("sasl")) {
+				pModule = m_pNetwork->GetModules().FindModule("sasl");
+				
+				if (pModule) {
+					if (pModule->GetNV("saslimpersonation").ToBool()) {
+						PutStatus("Unable to reload module [sasl] SaslImpersonation enabled.");
+						return;
+					}
+				}
+			}
 			m_pNetwork->GetModules().ReloadModule(sMod, sArgs, m_pUser, m_pNetwork, sModRet);
 			break;
 		default:
@@ -1628,19 +1665,19 @@ void CClient::HelpUser(const CString& sFilter) {
 	if (!m_pUser->IsAdmin()) {
 		AddCommandHelp(Table, "ListClients", "", "List all clients connected to your ZNC user", sFilter);
 	}
+
+	if (m_pUser->IsAdmin()) {
 	AddCommandHelp(Table, "ListServers", "", "List all servers of current IRC network", sFilter);
 
 	AddCommandHelp(Table, "AddNetwork", "<name>", "Add a network to your user", sFilter);
 	AddCommandHelp(Table, "DelNetwork", "<name>", "Delete a network from your user", sFilter);
 	AddCommandHelp(Table, "ListNetworks", "", "List all networks", sFilter);
-	if (m_pUser->IsAdmin()) {
 		AddCommandHelp(Table, "MoveNetwork", "<old user> <old network> <new user> [new network]", "Move an IRC network from one user to another", sFilter);
-	}
 	AddCommandHelp(Table, "JumpNetwork", "<network>", "Jump to another network (Alternatively, you can connect to ZNC several times, using `user/network` as username)", sFilter);
 
 	AddCommandHelp(Table, "AddServer", "<host> [[+]port] [pass]", "Add a server to the list of alternate/backup servers of current IRC network.", sFilter);
 	AddCommandHelp(Table, "DelServer", "<host> [port] [pass]", "Remove a server from the list of alternate/backup servers of current IRC network", sFilter);
-
+	}
 	AddCommandHelp(Table, "AddTrustedServerFingerprint", "<fi:ng:er>", "Add a trusted server SSL certificate fingerprint (SHA-256) to current IRC network.", sFilter);
 	AddCommandHelp(Table, "DelTrustedServerFingerprint", "<fi:ng:er>", "Delete a trusted server SSL certificate from current IRC network.", sFilter);
 	AddCommandHelp(Table, "ListTrustedServerFingerprints", "", "List all trusted server SSL certificates of current IRC network.", sFilter);

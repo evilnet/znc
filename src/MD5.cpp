@@ -35,7 +35,16 @@ CMD5::CMD5(const char* szText, uint32 nTextLen) {
 	MakeHash(szText, nTextLen);
 }
 
-CMD5::~CMD5() {}
+CMD5::~CMD5()
+{
+    if (m_pszMD5 != NULL)
+        delete[] m_pszMD5;
+}
+
+unsigned char* CMD5::GetHash()
+{
+    return m_pszMD5;
+}
 
 #define GET_UINT32(n,b,i) {                 \
 	(n) = ((uint32) (b)[(i)    ]      )     \
@@ -258,6 +267,12 @@ char* CMD5::MakeHash(const char* szText, uint32 nTextLen) {
 			md5sum[0], md5sum[1], md5sum[2], md5sum[3], md5sum[4], md5sum[5],
 			md5sum[6], md5sum[7], md5sum[8], md5sum[9], md5sum[10], md5sum[11],
 			md5sum[12], md5sum[13], md5sum[14], md5sum[15]);
+            
+    m_pszMD5 = new unsigned char[16];
+    m_pszMD5[0] = md5sum[0]; m_pszMD5[1] = md5sum[1]; m_pszMD5[2] = md5sum[2]; m_pszMD5[3] = md5sum[3]; 
+    m_pszMD5[4] = md5sum[4]; m_pszMD5[5] = md5sum[5]; m_pszMD5[6] = md5sum[6]; m_pszMD5[7] = md5sum[7]; 
+    m_pszMD5[8] = md5sum[8]; m_pszMD5[9] = md5sum[9]; m_pszMD5[10] = md5sum[10]; m_pszMD5[11] = md5sum[11]; 
+    m_pszMD5[12] = md5sum[12]; m_pszMD5[13] = md5sum[13]; m_pszMD5[14] = md5sum[14]; m_pszMD5[15] = md5sum[15]; 
 
 	return m_szMD5;
 }
