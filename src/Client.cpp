@@ -998,7 +998,8 @@ void CClient::HandleCap(const CString& sLine)
 	}
 }
 
-void CClient::ParsePass(const CString& sAuthLine) {
+void CClient::ParsePass(const CString& sAuthLine)
+{
 
 	// [network[/user[@identifier]/]]password
 
@@ -1019,11 +1020,13 @@ void CClient::ParsePass(const CString& sAuthLine) {
 			m_sPass = vsAuthLine[2];
 			break;
 		default:
-		m_sPass = sAuthLine;
+			m_sPass = sAuthLine;
+		}
 	}
 }
 
-void CClient::ParseUser(const CString& sAuthLine) {
+void CClient::ParseUser(const CString& sAuthLine)
+{
 	// user[@identifier]
 
 		ParseIdentifier(sAuthLine);
