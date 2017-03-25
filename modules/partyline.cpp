@@ -159,7 +159,7 @@ public:
 			if (sAction == "topic") {
 				pChannel = FindChannel(sKey);
 				if (pChannel && !(it->second).empty()) {
-					PutChan(pChannel->GetNicks(), ":irc.znc.in TOPIC " + pChannel->GetName() + " :" + it->second);
+					PutChan(pChannel->GetNicks(), ":znc.afternet.org TOPIC " + pChannel->GetName() + " :" + it->second);
 					pChannel->SetTopic(it->second);
 				}
 			}
@@ -290,19 +290,19 @@ public:
 						pChannel->SetTopic(sTopic);
 						SaveTopic(pChannel);
 					} else {
-						pUser->PutUser(":irc.znc.in 482 " +  pClient->GetNick() + " " + sChannel + " :You're not channel operator");
+						pUser->PutUser(":znc.afternet.org 482 " +  pClient->GetNick() + " " + sChannel + " :You're not channel operator");
 					}
 				} else {
 					sTopic = pChannel->GetTopic();
 
 					if (sTopic.empty()) {
-						pUser->PutUser(":irc.znc.in 331 " + pClient->GetNick() + " " + sChannel + " :No topic is set.");
+						pUser->PutUser(":znc.afternet.org 331 " + pClient->GetNick() + " " + sChannel + " :No topic is set.");
 					} else {
-						pUser->PutUser(":irc.znc.in 332 " + pClient->GetNick() + " " + sChannel + " :" + sTopic);
+						pUser->PutUser(":znc.afternet.org 332 " + pClient->GetNick() + " " + sChannel + " :" + sTopic);
 					}
 				}
 			} else {
-				pUser->PutUser(":irc.znc.in 442 " + pClient->GetNick() + " " + sChannel + " :You're not on that channel");
+				pUser->PutUser(":znc.afternet.org 442 " + pClient->GetNick() + " " + sChannel + " :You're not on that channel");
 			}
 			return HALT;
 		}
@@ -517,13 +517,13 @@ public:
 
 	const CString GetIRCServer(CIRCNetwork *pNetwork) {
 		if (!pNetwork) {
-			return "irc.znc.in";
+			return "znc.afternet.org";
 		}
 
 		const CString& sServer = pNetwork->GetIRCServer();
 		if (!sServer.empty())
 			return sServer;
-		return "irc.znc.in";
+		return "znc.afternet.org";
 	}
 
 	bool PutChan(const CString& sChan, const CString& sLine, bool bIncludeCurUser = true, bool bIncludeClient = true, CUser* pUser = NULL, CClient* pClient = NULL) {

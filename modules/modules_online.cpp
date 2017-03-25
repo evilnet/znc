@@ -58,7 +58,7 @@ public:
 			if (!GetNetwork()->GetIRCSock()) {
 				// if we are not connected to any IRC server, send
 				// an empty or module-nick filled response.
-				PutUser(":irc.znc.in 303 " + GetClient()->GetNick() + " :" + sBNCNicks);
+				PutUser(":znc.afternet.org 303 " + GetClient()->GetNick() + " :" + sBNCNicks);
 			} else {
 				// We let the server handle this request and then act on
 				// the 303 response from the IRC server.

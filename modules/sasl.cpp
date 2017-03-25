@@ -16,6 +16,7 @@
 
 #include <znc/IRCNetwork.h>
 #include <znc/IRCSock.h>
+#include <znc/User.h>
 
 static const struct {
 	const char *szName;
@@ -102,42 +103,52 @@ public:
 	}
 
 	void Set(const CString& sLine) {
-		SetNV("username", sLine.Token(1));
-		SetNV("password", sLine.Token(2));
+		if (!SaslImpersonation()) {
+		    SetNV("username", sLine.Token(1));
+		    SetNV("password", sLine.Token(2));
 
-		PutModule("Username has been set to [" + GetNV("username") + "]");
-		PutModule("Password has been set to [" + GetNV("password") + "]");
+		    PutModule("Username has been set to [" + GetNV("username") + "]");
+		    PutModule("Password has been set to [" + GetNV("password") + "]");
+	    }
 	}
-
+	
+	bool SaslImpersonation() const {
+		return GetNV("saslimpersonation").ToBool();
+	}
+	
 	void SetMechanismCommand(const CString& sLine) {
-		CString sMechanisms = sLine.Token(1, true).AsUpper();
+		if (!SaslImpersonation()) {
+		    CString sMechanisms = sLine.Token(1, true).AsUpper();
 
-		if (!sMechanisms.empty()) {
-			VCString vsMechanisms;
-			sMechanisms.Split(" ", vsMechanisms);
+		    if (!sMechanisms.empty()) {
+			    VCString vsMechanisms;
+			    sMechanisms.Split(" ", vsMechanisms);
 
-			for (VCString::const_iterator it = vsMechanisms.begin(); it != vsMechanisms.end(); ++it) {
-				if (!SupportsMechanism(*it)) {
-					PutModule("Unsupported mechanism: " + *it);
-					return;
-				}
-			}
+			    for (VCString::const_iterator it = vsMechanisms.begin(); it != vsMechanisms.end(); ++it) {
+				    if (!SupportsMechanism(*it)) {
+				        PutModule("Unsupported mechanism: " + *it);
+					    return;
+				    }
+			    }
 
-			SetNV(NV_MECHANISMS, sMechanisms);
-		}
+			    SetNV(NV_MECHANISMS, sMechanisms);
+		    }
 
-		PutModule("Current mechanisms set: " + GetMechanismsString());
+		    PutModule("Current mechanisms set: " + GetMechanismsString());
+	    }
 	}
 
 	void RequireAuthCommand(const CString& sLine) {
-		if (!sLine.Token(1).empty()) {
-			SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
-		}
+		if (!SaslImpersonation()) {
+		    if (!sLine.Token(1).empty()) {
+			    SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
+		    }
 
-		if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
-			PutModule("We require SASL negotiation to connect");
-		} else {
-			PutModule("We will connect even if SASL fails");
+		    if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
+			    PutModule("We require SASL negotiation to connect");
+		    } else {
+			    PutModule("We will connect even if SASL fails");
+		    }
 		}
 	}
 
@@ -181,7 +192,7 @@ public:
 
 	void Authenticate(const CString& sLine) {
 		if (m_Mechanisms.GetCurrent().Equals("PLAIN") && sLine.Equals("+")) {
-			CString sAuthLine = GetNV("username") + '\0' + GetNV("username")  + '\0' + GetNV("password");
+			CString sAuthLine = (SaslImpersonation() ? GetNV("impersonationuser") : GetNV("username")) + '\0' + GetNV("username")  + '\0' + GetNV("password");
 			sAuthLine.Base64Encode();
 			PutIRC("AUTHENTICATE " + sAuthLine);
 		} else {

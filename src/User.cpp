@@ -604,7 +604,7 @@ void CUser::UserConnected(CClient* pClient) {
 		BounceAllClients();
 	}
 
-	pClient->PutClient(":irc.znc.in 001 " + pClient->GetNick() + " :- Welcome to ZNC -");
+	pClient->PutClient(":znc.afternet.org 001 " + pClient->GetNick() + " :- Welcome to ZNC -");
 
 	m_vClients.push_back(pClient);
 }
