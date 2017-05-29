@@ -122,8 +122,8 @@ CIRCNetwork::CIRCNetwork(CUser *pUser, const CString& sName) {
 	m_bIRCAway = false;
 	m_sEncoding = "";
 
-	m_fFloodRate = 1;
-	m_uFloodBurst = 4;
+	m_fFloodRate = 2;
+	m_uFloodBurst = 9;
 
 	m_uJoinDelay = 0;
 
