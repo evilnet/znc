@@ -239,17 +239,20 @@ void CMD5::md5_finish(md5_context* ctx, uint8 digest[16]) const {
 
 char* CMD5::MakeHash(const char* szText, uint32 nTextLen) {
     md5_context ctx;
-    unsigned char md5sum[16];
 
     md5_starts(&ctx);
     md5_update(&ctx, (uint8*)szText, nTextLen);
-    md5_finish(&ctx, md5sum);
+    md5_finish(&ctx, m_pMD5Sum);
 
     sprintf(m_szMD5,
             "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x",
-            md5sum[0], md5sum[1], md5sum[2], md5sum[3], md5sum[4], md5sum[5],
-            md5sum[6], md5sum[7], md5sum[8], md5sum[9], md5sum[10], md5sum[11],
-            md5sum[12], md5sum[13], md5sum[14], md5sum[15]);
+            m_pMD5Sum[0], m_pMD5Sum[1], m_pMD5Sum[2], m_pMD5Sum[3], m_pMD5Sum[4], m_pMD5Sum[5],
+            m_pMD5Sum[6], m_pMD5Sum[7], m_pMD5Sum[8], m_pMD5Sum[9], m_pMD5Sum[10], m_pMD5Sum[11],
+            m_pMD5Sum[12], m_pMD5Sum[13], m_pMD5Sum[14], m_pMD5Sum[15]);
 
     return m_szMD5;
+}
+
+unsigned char(&CMD5::GetHash())[16] {
+    return m_pMD5Sum;
 }
