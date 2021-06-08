@@ -253,6 +253,6 @@ char* CMD5::MakeHash(const char* szText, uint32 nTextLen) {
     return m_szMD5;
 }
 
-unsigned char(&CMD5::GetHash())[16] {
+uint8(&CMD5::GetHash())[16] {
     return m_pMD5Sum;
 }

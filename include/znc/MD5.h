@@ -24,7 +24,7 @@ typedef struct {
 class CMD5 {
   protected:
     char m_szMD5[33];
-    unsigned char m_pMD5Sum[16];
+    uint8 m_pMD5Sum[16];
 
   public:
     CMD5();
@@ -37,7 +37,7 @@ class CMD5 {
     operator char*() const { return (char*)m_szMD5; }
 
     char* MakeHash(const char* szText, uint32 nTextLen);
-    unsigned char(&GetHash())[16];
+    uint8(&GetHash())[16];
 
   protected:
     void md5_starts(md5_context* ctx) const;
