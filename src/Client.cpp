@@ -94,8 +94,8 @@ void CClient::SendRequiredPasswordNotice() {
         "Configure your client to send a server password.");
     PutClient(
         ":irc.znc.in NOTICE " + GetNick() + " :*** "
-        "To connect now, you can use /quote PASS <username>:<password>, "
-        "or /quote PASS <username>/<network>:<password> to connect to a "
+        "To connect now, you can use /quote PASS /<username>/<password>, "
+        "or /quote PASS <network>/<username>/<password> to connect to a "
         "specific network.");
 }
 
@@ -773,29 +773,34 @@ void CClient::HandleCap(const CMessage& Message) {
 }
 
 void CClient::ParsePass(const CString& sAuthLine) {
-    // [user[@identifier][/network]:]password
+    // [network/user[@identifier]/]password
 
-    const size_t uColon = sAuthLine.find(":");
-    if (uColon != CString::npos) {
-        m_sPass = sAuthLine.substr(uColon + 1);
-
-        ParseUser(sAuthLine.substr(0, uColon));
+    const size_t uSlash = sAuthLine.find("/");
+    if (uSlash != CString::npos) {
+        VCString vsAuthLine;
+        sAuthLine.Split("/", vsAuthLine, false);
+        switch (vsAuthLine.size()) {
+            case 2:
+                ParseUser(vsAuthLine[0]);
+                m_sPass = vsAuthLine[1];
+                break;
+            case 3:
+                m_sNetwork = vsAuthLine[0];
+                ParseUser(vsAuthLine[1]);
+                m_sPass = vsAuthLine[2];
+                break;
+            default:
+                m_sPass = sAuthLine;
+        }
     } else {
         m_sPass = sAuthLine;
     }
 }
 
 void CClient::ParseUser(const CString& sAuthLine) {
-    // user[@identifier][/network]
-
-    const size_t uSlash = sAuthLine.rfind("/");
-    if (uSlash != CString::npos) {
-        m_sNetwork = sAuthLine.substr(uSlash + 1);
-
-        ParseIdentifier(sAuthLine.substr(0, uSlash));
-    } else {
-        ParseIdentifier(sAuthLine);
-    }
+    // work was moved to ParsePass for Nefarious
+    // LOC format password support
+    ParseIdentifier(sAuthLine);
 }
 
 void CClient::ParseIdentifier(const CString& sAuthLine) {
