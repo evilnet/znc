@@ -229,8 +229,6 @@ class CSASLAuthMod : public CModule {
             CUser* pUser = CModule::GetUser();
             CIRCNetwork* pNetwork = CModule::GetNetwork();
             if (pUser != NULL && !(pNetwork->GetName().CaseCmp(GetNV("networkname")))) {
-                if (!(pUser->GetUserName().StrCmp("MrLenin")))
-                    return CONTINUE;
                 std::ostringstream sWebIrcMsg;
                 CString sUsername = pUser->GetUserName();
                 CMD5 md5(sUsername + GetNV("usersalt"));
