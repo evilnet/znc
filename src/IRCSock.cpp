@@ -685,7 +685,7 @@ bool CIRCSock::OnNumericMessage(CNumericMessage& Message) {
 
     switch (uRaw) {
         case 1: {  // :irc.server.com 001 nick :Welcome to the Internet Relay
-            if (m_bAuthed && sServer == "irc.znc.in") {
+            if (m_bAuthed && sServer == "znc.afternet.org") {
                 // m_bAuthed == true => we already received another 001 => we
                 // might be in a traffic loop
                 m_pNetwork->PutStatus(t_s(

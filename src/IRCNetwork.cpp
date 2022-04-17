@@ -665,7 +665,7 @@ void CIRCNetwork::ClientConnected(CClient* pClient) {
     pClient->SetPlaybackActive(true);
 
     if (m_RawBuffer.IsEmpty()) {
-        pClient->PutClient(":irc.znc.in 001 " + pClient->GetNick() +
+        pClient->PutClient(":znc.afternet.org 001 " + pClient->GetNick() +
                            " :" + t_s("Welcome to ZNC"));
     } else {
         const CString& sClientNick = pClient->GetNick(false);
@@ -711,7 +711,7 @@ void CIRCNetwork::ClientConnected(CClient* pClient) {
     if (m_bIRCAway) {
         // If they want to know their away reason they'll have to whois
         // themselves. At least we can tell them their away status...
-        pClient->PutClient(":irc.znc.in 306 " + GetIRCNick().GetNick() +
+        pClient->PutClient(":znc.afternet.org 306 " + GetIRCNick().GetNick() +
                            " :You have been marked as being away");
     }
 

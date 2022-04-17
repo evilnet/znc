@@ -1153,6 +1153,7 @@ void CClient::UserCommand(CString& sLine) {
         }
 
         CString sModRet;
+        CModule* pModule;
 
         switch (eType) {
             case CModInfo::GlobalModule:
@@ -1162,6 +1163,15 @@ void CClient::UserCommand(CString& sLine) {
                 m_pUser->GetModules().UnloadModule(sMod, sModRet);
                 break;
             case CModInfo::NetworkModule:
+                if (!sMod.CaseCmp("sasl")) {
+                    pModule = m_pNetwork->GetModules().FindModule("sasl");
+                    if (pModule) {
+                        if (pModule->GetNV("saslimpersonation").ToBool()) {
+                            PutStatus("Unable to unload module [sasl] SaslImpersonation enabled.");
+                            return;
+                        }
+                    }
+                }
                 m_pNetwork->GetModules().UnloadModule(sMod, sModRet);
                 break;
             default:
@@ -1230,6 +1240,7 @@ void CClient::UserCommand(CString& sLine) {
         }
 
         CString sModRet;
+        CModule* pModule;
 
         switch (eType) {
             case CModInfo::GlobalModule:
@@ -1241,8 +1252,17 @@ void CClient::UserCommand(CString& sLine) {
                                                    nullptr, sModRet);
                 break;
             case CModInfo::NetworkModule:
-                m_pNetwork->GetModules().ReloadModule(sMod, sArgs, m_pUser,
-                                                      m_pNetwork, sModRet);
+                if (!sMod.CaseCmp("sasl")) {
+                    pModule = m_pNetwork->GetModules().FindModule("sasl");
+				
+                    if (pModule) {
+                        if (pModule->GetNV("saslimpersonation").ToBool()) {
+                            PutStatus("Unable to reload module [sasl] SaslImpersonation enabled.");
+                            return;
+                        }
+                    }
+                }
+                m_pNetwork->GetModules().ReloadModule(sMod, sArgs, m_pUser, m_pNetwork, sModRet);
                 break;
             default:
                 sModRet = t_f(

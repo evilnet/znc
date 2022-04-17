@@ -16,6 +16,7 @@
 
 #include <znc/IRCNetwork.h>
 #include <znc/IRCSock.h>
+#include <znc/User.h>
 #include <algorithm>
 
 #define NV_REQUIRE_AUTH "require_auth"
@@ -101,59 +102,52 @@ class CSASLMod : public CModule {
     }
 
     void Set(const CString& sLine) {
-        if (sLine.Token(1).empty()) {
-            CString sUsername = GetNV("username");
-            CString sPassword = GetNV("password");
+        if (!SaslImpersonation()) {
+            SetNV("username", sLine.Token(1));
+            SetNV("password", sLine.Token(2));
 
-            if (sUsername.empty()) {
-                PutModule(t_s("Username is currently not set"));
-            } else {
-                PutModule(t_f("Username is currently set to '{1}'")(sUsername));
-            }
-            if (sPassword.empty()) {
-                PutModule(t_s("Password was not supplied"));
-            } else {
-                PutModule(t_s("Password was supplied"));
-            }
-            return;
+            PutModule(t_f("Username has been set to [{1}]")(GetNV("username")));
+            PutModule(t_f("Password has been set to [{1}]")(GetNV("password")));
         }
-
-        SetNV("username", sLine.Token(1));
-        SetNV("password", sLine.Token(2));
-
-        PutModule(t_f("Username has been set to [{1}]")(GetNV("username")));
-        PutModule(t_f("Password has been set to [{1}]")(GetNV("password")));
     }
-
+	
+    bool SaslImpersonation() const {
+        return GetNV("saslimpersonation").ToBool();
+    }
+	
     void SetMechanismCommand(const CString& sLine) {
-        CString sMechanisms = sLine.Token(1, true).AsUpper();
+        if (!SaslImpersonation()) {
+            CString sMechanisms = sLine.Token(1, true).AsUpper();
 
-        if (!sMechanisms.empty()) {
-            VCString vsMechanisms;
-            sMechanisms.Split(" ", vsMechanisms);
+            if (!sMechanisms.empty()) {
+                VCString vsMechanisms;
+                sMechanisms.Split(" ", vsMechanisms);
 
-            for (const CString& sMechanism : vsMechanisms) {
-                if (!SupportsMechanism(sMechanism)) {
-                    PutModule("Unsupported mechanism: " + sMechanism);
-                    return;
+                for (const CString& sMechanism : vsMechanisms) {
+                    if (!SupportsMechanism(sMechanism)) {
+                        PutModule("Unsupported mechanism: " + sMechanism);
+                        return;
+                    }
                 }
+
+                SetNV(NV_MECHANISMS, sMechanisms);
             }
 
-            SetNV(NV_MECHANISMS, sMechanisms);
+            PutModule(t_f("Current mechanisms set: {1}")(GetMechanismsString()));
         }
-
-        PutModule(t_f("Current mechanisms set: {1}")(GetMechanismsString()));
     }
 
     void RequireAuthCommand(const CString& sLine) {
-        if (!sLine.Token(1).empty()) {
-            SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
-        }
+        if (!SaslImpersonation()) {
+            if (!sLine.Token(1).empty()) {
+                SetNV(NV_REQUIRE_AUTH, sLine.Token(1));
+            }
 
-        if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
-            PutModule(t_s("We require SASL negotiation to connect"));
-        } else {
-            PutModule(t_s("We will connect even if SASL fails"));
+            if (GetNV(NV_REQUIRE_AUTH).ToBool()) {
+                PutModule(t_s("We require SASL negotiation to connect"));
+            } else {
+                PutModule(t_s("We will connect even if SASL fails"));
+            }
         }
     }
 
@@ -199,8 +193,8 @@ class CSASLMod : public CModule {
         /* Send blank authenticate for other mechanisms (like EXTERNAL). */
         CString sAuthLine;
         if (m_Mechanisms.GetCurrent().Equals("PLAIN") && sLine.Equals("+")) {
-            sAuthLine = GetNV("username") + '\0' + GetNV("username") +
-                                '\0' + GetNV("password");
+            sAuthLine = (SaslImpersonation() ? GetNV("impersonationuser") : GetNV("username")) +
+                             '\0' + GetNV("username")  + '\0' + GetNV("password");
             sAuthLine.Base64Encode();
         }
 
