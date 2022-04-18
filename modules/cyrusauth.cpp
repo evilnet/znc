@@ -59,7 +59,6 @@ class CSASLAuthMod : public CModule {
                    t_d("Set the hostname used for WebIRC"),
                    [=](const CString& sLine) { SetWebIrcHost(sLine);});
         AddCommand("SetUserSalt", t_d("salt"),
-      static_cast<CModCommand::ModCmdFunc>(&CSASLAuthMod::SetUserSalt),
                    t_d("Set the salt used when hashing usernames"),
                    [=](const CString& sLine) { SetUserSalt(sLine);});
         AddCommand("SetNetworkName", t_d("network"),
@@ -68,7 +67,7 @@ class CSASLAuthMod : public CModule {
                    [=](const CString& sLine) { SetNetworkName(sLine);});
         AddCommand("SetServer", t_d("server port ssl"),
                    t_d("Set the server and port used for newly created "
-                       "accounts");
+                       "accounts"),
                    [=](const CString& sLine) { SetServer(sLine);});
     }
 
@@ -286,45 +285,41 @@ class CSASLAuthMod : public CModule {
         SetNV("server", sLine.Token(1));
         SetNV("port", sLine.Token(2));
         SetNV("ssl", sLine.Token(3));
-        PutModule("Server and port used for newly created accounts has "
-                  "been set to [" + GetNV("server") + ":" + 
+        PutModule(t_f("Server and port used for newly created accounts has "
+                  "been set to [{1}]")(GetNV("server") + ":" + 
                   (GetNV("ssl").ToBool() ? "+" + GetNV("port") :
-                  GetNV("port")) + "]");
+                  GetNV("port"))));
     }
 
     void SetNetworkName(const CString& sLine) {
         SetNV("networkname", sLine.Token(1));
-        PutModule("Network name used for newly created accounts has been"
-                  " set to [" + GetNV("networkname") + "]");
+        PutModule(t_f("Network name used for newly created accounts has been"
+                  " set to [{1}]")(GetNV("networkname")));
     }
 
     void SetImpersonateAccount(const CString& sLine) {
         SetNV("impersonationusername", sLine.Token(1));
         SetNV("impersonationpassword", sLine.Token(2));
-        PutModule("SASL Impersonaton Account Username has been set to ["
-                  + GetNV("impersonationusername") + "]");
-        PutModule("SASL Impersonaton Account Password has been set to ["                   + GetNV("impersonationpassword") + "]");
+        PutModule(t_f("SASL Impersonaton Account Username has been set "
+                      "to [{1}]")(GetNV("impersonationusername")));
+        PutModule(t_f("SASL Impersonaton Account Password has been set to [{1}]")(GetNV("impersonationpassword")));
     }
 
     void SetWebIrc(const CString& sLine) {
         SetNV("webircusername", sLine.Token(1));
         SetNV("webircpassword", sLine.Token(2));
-        PutModule("WebIRC Username has been set to [" +
-                  GetNV("webircusername") + "]");
-        PutModule("WebIRC Password has been set to [" +
-                  GetNV("webircpassword") + "]");
+        PutModule(t_f("WebIRC Username has been set to [{1}]")(GetNV("webircusername")));
+        PutModule(t_f("WebIRC Password has been set to [{1}]")(GetNV("webircpassword")));
     }
 
     void SetWebIrcHost(const CString& sLine) {
         SetNV("webirchost", sLine);
-        PutModule("WebIRC hostname has been set to [" +
-                  GetNV("webirchost") + "]");
+        PutModule(t_f("WebIRC hostname has been set to [{1}]")(GetNV("webirchost")));
     }
 
     void SetUserSalt(const CString& sLine) {
         SetNV("usersalt", sLine.Token(1));
-        PutModule("User salt has been set to [" +
-                  GetNV("usersalt") + "]");
+        PutModule(t_f("User salt has been set to [{1}]")(GetNV("usersalt")));
     }
 
     bool CreateUser() const { return GetNV("CreateUser").ToBool(); }
