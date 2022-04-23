@@ -221,8 +221,8 @@ class CSASLAuthMod : public CModule {
         return CONTINUE;
     }
 
-    virtual EModRet OnIRCRegistration(CString& sPass, CString& sNick,
-            CString& sIdent, CString& sRealName)
+    EModRet OnIRCRegistration(CString& sPass, CString& sNick,
+            CString& sIdent, CString& sRealName) override
     {
         if (m_bWebIrcEnabled) {
             CUser* pUser = CModule::GetUser();
@@ -313,7 +313,7 @@ class CSASLAuthMod : public CModule {
     }
 
     void SetWebIrcHost(const CString& sLine) {
-        SetNV("webirchost", sLine);
+        SetNV("webirchost", sLine.Token(1));
         PutModule(t_f("WebIRC hostname has been set to [{1}]")(GetNV("webirchost")));
     }
 
