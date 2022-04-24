@@ -174,11 +174,9 @@ class CSASLAuthMod : public CModule {
                     network->SetIRCConnectEnabled(true);
 
                     if (SaslImpersonate()) {
-                        DEBUG("cyrusauth sasl SaslImpersonating");
                         CModule* pModule = network->GetModules().FindModule("sasl");
 
                         if (pModule) {
-                            DEBUG("cyrusauth sasl module found");
                             pModule->SetNV("saslimpersonation", "yes");
                             pModule->SetNV("username", sUsername);
                             pModule->SetNV("authzid", GetNV("authzid"));
@@ -250,7 +248,7 @@ class CSASLAuthMod : public CModule {
 
     bool CreateUser() const { return GetNV("CreateUser").ToBool(); }
 
-    bool SaslImpersonate() const { return !GetNV("saslimpersonation").ToBool(); }
+    bool SaslImpersonate() const { return GetNV("saslimpersonation").ToBool(); }
 
     CString CloneUser() const { return GetNV("CloneUser"); }
 
