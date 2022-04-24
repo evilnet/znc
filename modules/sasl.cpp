@@ -194,7 +194,7 @@ class CSASLMod : public CModule {
         CString sAuthLine;
         if (m_Mechanisms.GetCurrent().Equals("PLAIN") && sLine.Equals("+")) {
             if (SaslImpersonation()) {
-                sAuthLine = GetNV("authzid") + '\0' + GetNV("username")  +
+                sAuthLine = GetNV("username") + '\0' + GetNV("authzid")  +
                                 '\0' + GetNV("authzpass");
             } else {
                 sAuthLine = GetNV("username") + '\0' + GetNV("username")  +
