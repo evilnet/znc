@@ -32,8 +32,6 @@
 class CWebIRC : public CModule {
   public:
     MODCONSTRUCTOR(CWebIRC) {
-        m_bWebIrcEnabled = false;
-
         AddHelpCommand();
         AddCommand("Show", "", t_d("Shows current settings"),
                    [=](const CString& sLine) { ShowCommand(sLine); });
@@ -87,22 +85,22 @@ class CWebIRC : public CModule {
         else 
             PutModule(t_s("WebIRC hostname is not set"));
 
-        if (!Username().empty()) {
+        if (!Username().empty())
             PutModule(t_f("WebIRC username is set to [{1}]")(Username()));
         else
             PutModule(t_s("WebIRC username is not set"));
 
-        if (!Password().empty()) {
+        if (!Password().empty())
             PutModule(t_s("WebIRC password is set"));
         else
             PutModule(t_s("WebIRC password is not set"));
 
-        if (!Network().empty()) {
+        if (!Network().empty())
             PutModule(t_f("WebIRC network is set to [{1}]")(Network()));
         else
             PutModule(t_s("WebIRC network is not set"));
 
-        if (!UserSalt().empty()) {
+        if (!UserSalt().empty())
             PutModule(t_f("WebIRC user salt is set to [{1}]")(UserSalt()));
         else
             PutModule(t_s("WebIRC user salt is not set"));
@@ -145,8 +143,7 @@ class CWebIRC : public CModule {
      * @param[in] i 128bit result to downsample.
      * @return downsampled result.
      */
-    static inline uint8* downsample(unsigned char *i)
-    {
+    static inline uint8* downsample(unsigned char *i) {
         uint8* r = new uint8[3];
         r[0] = i[0] ^ i[1] ^ i[2] ^ i[3] ^ i[4];
         r[1] = i[5] ^ i[6] ^ i[7] ^ i[8] ^ i[9];
