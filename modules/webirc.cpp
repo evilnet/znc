@@ -60,20 +60,20 @@ class CWebIRC : public CModule {
     EModRet OnIRCRegistration(CString& sPass, CString& sNick,
             CString& sIdent, CString& sRealName) override
     {
-        if (m_bWebIrcEnabled) {
-            CUser* pUser = CModule::GetUser();
-            CIRCNetwork* pNetwork = CModule::GetNetwork();
-            if (pUser != NULL && !(pNetwork->GetName().CaseCmp(Network()))) {
-                std::ostringstream sWebIrcMsg;
-                CString sUsername = pUser->GetUserName();
-                CMD5 md5(sUsername + UserSalt());
-                uint8* hashBytes = downsample(md5.GetHash());
-                unsigned int hashInts[3] = { hashBytes[0], hashBytes[1], hashBytes[2] };
-                sWebIrcMsg << "WEBIRC " << Password() << " " << Username() << " " << sUsername <<
-                "." << HostSuffix() << " 255." << hashInts[0] << "." << hashInts[1] << "." << hashInts[2];
-                CModule::PutIRC(sWebIrcMsg.str());
-                delete[] hashBytes;
-            }
+        CUser* pUser = CModule::GetUser();
+        CIRCNetwork* pNetwork = CModule::GetNetwork();
+
+        if (pUser != NULL && !(pNetwork->GetName().CaseCmp(Network()))) {
+            std::ostringstream sWebIrcMsg;
+            CString sUsername = pUser->GetUserName();
+            CMD5 md5(sUsername + UserSalt());
+            uint8* hashBytes = downsample(md5.GetHash());
+            unsigned int hashInts[3] = { hashBytes[0], hashBytes[1], hashBytes[2] };
+            sWebIrcMsg << "WEBIRC " << Password() << " " << Username() << " "
+                << sUsername << "." << HostSuffix() << " 255." << hashInts[0]
+                << "." << hashInts[1] << "." << hashInts[2];
+            CModule::PutIRC(sWebIrcMsg.str());
+            delete[] hashBytes;
         }
 
         return CONTINUE;
