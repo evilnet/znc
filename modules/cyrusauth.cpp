@@ -174,9 +174,11 @@ class CSASLAuthMod : public CModule {
                     network->SetIRCConnectEnabled(true);
 
                     if (SaslImpersonate()) {
+                        DEBUG("cyrusauth sasl SaslImpersonating");
                         CModule* pModule = network->GetModules().FindModule("sasl");
 
                         if (pModule) {
+                            DEBUG("cyrusauth sasl module found");
                             pModule->SetNV("saslimpersonation", "yes");
                             pModule->SetNV("username", sUsername);
                             pModule->SetNV("authzid", GetNV("authzid"));
