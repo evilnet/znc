@@ -24,16 +24,14 @@
 #include <znc/znc.h>
 #include <znc/IRCNetwork.h>
 #include <znc/User.h>
-#include <znc/MD5.h>
 
 #include <sasl/sasl.h>
-#include <sstream>
 
 class CSASLAuthMod : public CModule {
   public:
     MODCONSTRUCTOR(CSASLAuthMod) {
         m_Cache.SetTTL(60000 /*ms*/);
-        m_bWebIrcEnabled = false;
+
         m_cbs[0].id = SASL_CB_GETOPT;
         m_cbs[0].proc = reinterpret_cast<int (*)()>(CSASLAuthMod::getopt);
         m_cbs[0].context = this;
@@ -48,27 +46,10 @@ class CSASLAuthMod : public CModule {
                    t_d("Create ZNC users upon first successful login, "
                        "optionally from a template"),
                    [=](const CString& sLine) { CreateUsersCommand(sLine); });
-        AddCommand("SetImpersonateAccount", t_d("username password"),
+        AddCommand("SetAuthorizationAccount", t_d("username password"),
                    t_d("Set the username and password for the SASL "
-                       "Impersonaton Account"),
-                   [=](const CString& sLine) { SetImpersonateAccount(sLine);});
-        AddCommand("SetWebIrc", t_d("username password"),
-                   t_d("Set the username and password for WebIRC"),
-                   [=](const CString& sLine) { SetWebIrc(sLine);});
-        AddCommand("SetWebIrcHost", t_d("hostname"),
-                   t_d("Set the hostname used for WebIRC"),
-                   [=](const CString& sLine) { SetWebIrcHost(sLine);});
-        AddCommand("SetUserSalt", t_d("salt"),
-                   t_d("Set the salt used when hashing usernames"),
-                   [=](const CString& sLine) { SetUserSalt(sLine);});
-        AddCommand("SetNetworkName", t_d("network"),
-                   t_d("Set the network name used for newly created "
-                       "accounts"),
-                   [=](const CString& sLine) { SetNetworkName(sLine);});
-        AddCommand("SetServer", t_d("server port ssl"),
-                   t_d("Set the server and port used for newly created "
-                       "accounts"),
-                   [=](const CString& sLine) { SetServer(sLine);});
+                       "Authorization Account"),
+                   [=](const CString& sLine) { SetAuthorizationAccount(sLine);});
     }
 
     ~CSASLAuthMod() override { sasl_done(); }
@@ -90,15 +71,9 @@ class CSASLAuthMod : public CModule {
             if (it->Equals("saslauthd") || it->Equals("auxprop")) {
                 m_sMethod += *it + " ";
             } else {
-                if (it->Equals("webirc")) {
-                    m_bWebIrcEnabled = true;
-                } else if (it->Equals("impersonation")) {
-                    m_bSaslImpersonateEnabled = true;
-                } else {
-                    CUtils::PrintError(
-                        t_f("Ignoring invalid SASL pwcheck method: {1}")(*it));
-                    sMessage = t_s("Ignored invalid SASL pwcheck method");
-                }
+                CUtils::PrintError(
+                    t_f("Ignoring invalid SASL pwcheck method: {1}")(*it));
+                sMessage = t_s("Ignored invalid SASL pwcheck method");
             }
         }
 
@@ -119,9 +94,10 @@ class CSASLAuthMod : public CModule {
     }
 
     EModRet OnLoginAttempt(std::shared_ptr<CAuthBase> Auth) override {
-        const CString& sUsername = Auth->GetUsername();
+        const CString& sUsernameOrig = Auth->GetUsername();
+        const CString& sUsername = sUsernameOrig.AsLower();
         const CString& sPassword = Auth->GetPassword();
-        CUser* pUser(CZNC::Get().FindUser(sUsername.AsLower()));
+        CUser* pUser(CZNC::Get().FindUser(sUsername));
         sasl_conn_t* sasl_conn(nullptr);
         bool bSuccess = false;
 
@@ -135,8 +111,8 @@ class CSASLAuthMod : public CModule {
             DEBUG("saslauth: Found [" + sUsername + "] in cache");
         } else if (sasl_server_new("znc", nullptr, nullptr, nullptr, nullptr,
                                    m_cbs, 0, &sasl_conn) == SASL_OK &&
-                   sasl_checkpass(sasl_conn, sUsername.AsLower().c_str(),
-                                  sUsername.AsLower().size(), sPassword.c_str(),
+                   sasl_checkpass(sasl_conn, sUsername.c_str(),
+                                  sUsername.size(), sPassword.c_str(),
                                   sPassword.size()) == SASL_OK) {
             m_Cache.AddItem(sCacheKey);
 
@@ -151,7 +127,7 @@ class CSASLAuthMod : public CModule {
         if (bSuccess) {
             if (!pUser) {
                 CString sErr;
-                pUser = new CUser(sUsername.AsLower());
+                pUser = new CUser(sUsername);
 
                 if (ShouldCloneUser()) {
                     CUser* pBaseUser = CZNC::Get().FindUser(CloneUser());
@@ -171,15 +147,13 @@ class CSASLAuthMod : public CModule {
                     }
                 }
 
-                pUser->SetNick(sUsername);
-                pUser->SetAltNick(sUsername + "_");
-                pUser->SetIdent(sUsername);
-                pUser->SetRealName(sUsername);
-                CString sAddNetworkError;
-                CIRCNetwork* pNetwork = pUser->AddNetwork(GetNV("networkname"), sAddNetworkError);
-                if (pNetwork) {
-                    pNetwork->AddServer(GetNV("server"), GetNV("port").ToUShort(), "", GetNV("ssl").ToBool());
+                pUser->SetNick(sUsernameOrig);
+                pUser->SetAltNick(sUsernameOrig + "_");
+                pUser->SetIdent(sUsernameOrig);
+                pUser->SetRealName(sUsernameOrig);
 
+                std::vector<CIRCNetwork*> vNetworks = pUser->GetNetworks();
+                for (auto &network : vNetworks) {
                     if (pUser) {
                         // "::" is an invalid MD5 hash, so user won't be able to
                         // login by usual method
@@ -188,28 +162,24 @@ class CSASLAuthMod : public CModule {
 
                     if (pUser && !CZNC::Get().AddUser(pUser, sErr)) {
                         DEBUG("saslauth: Add user [" << sUsername
-                                                 << "] failed: " << sErr);
+                                             << "] failed: " << sErr);
                         delete pUser;
                         pUser = nullptr;
                     }
-                    if (m_bSaslImpersonateEnabled) {
+
+                    if (SaslImpersonate()) {
                         CString sModRet;
-                        if (pNetwork->GetModules().LoadModule("sasl", "", CModInfo::NetworkModule, pUser, pNetwork, sModRet))
-                        {
-                            CModule* pModule = pNetwork->GetModules().FindModule("sasl");
-                            if (pModule) {
-                                pModule->SetNV("saslimpersonation", "yes");
-                                pModule->SetNV("impersonationuser", sUsername);
-                                pModule->SetNV("username", GetNV("impersonationusername"));
-                                pModule->SetNV("password", GetNV("impersonationpassword"));
-                                pModule->SetNV("require_auth", "yes");
-                                pModule->SetNV("mechanisms", "PLAIN");
-                            }
+
+                        CModule* pModule = network->GetModules().FindModule("sasl");
+
+                        if (pModule) {
+                            pModule->SetNV("saslimpersonation", "yes");
+                            pModule->SetNV("username", sUsername);
+                            pModule->SetNV("authzid", GetNV("authzid"));
+                            pModule->SetNV("authzpass", GetNV("authzpass"));
                         }
-                        else DEBUG("saslauth: Failure loading sasl module for created user [" << sUsername << "] ");
                     }
                 }
-                else DEBUG("saslauth: Failure adding network for created user [" << sUsername << "]: " << sAddNetworkError);
             }
 
             if (pUser) {
@@ -220,29 +190,6 @@ class CSASLAuthMod : public CModule {
 
         return CONTINUE;
     }
-
-    EModRet OnIRCRegistration(CString& sPass, CString& sNick,
-            CString& sIdent, CString& sRealName) override
-    {
-        if (m_bWebIrcEnabled) {
-            CUser* pUser = CModule::GetUser();
-            CIRCNetwork* pNetwork = CModule::GetNetwork();
-            if (pUser != NULL && !(pNetwork->GetName().CaseCmp(GetNV("networkname")))) {
-                std::ostringstream sWebIrcMsg;
-                CString sUsername = pUser->GetUserName();
-                CMD5 md5(sUsername + GetNV("usersalt"));
-                uint8* hashBytes = downsample(md5.GetHash());
-                unsigned int hashInts[3] = { hashBytes[0], hashBytes[1], hashBytes[2] };
-                sWebIrcMsg << "WEBIRC " << GetNV("webircpassword") << " " << GetNV("webircusername") << " " << sUsername <<
-                GetNV("webirchost") << " 255." << hashInts[0] << "." << hashInts[1] << "." << hashInts[2];
-                CModule::PutIRC(sWebIrcMsg.str());
-                delete[] hashBytes;
-            }
-        }
-
-        return CONTINUE;
-    }
-
 
     const CString& GetMethod() const { return m_sMethod; }
 
@@ -281,48 +228,23 @@ class CSASLAuthMod : public CModule {
         }
     }
 
-    void SetServer(const CString& sLine) {
-        SetNV("server", sLine.Token(1));
-        SetNV("port", sLine.Token(2));
-        SetNV("ssl", sLine.Token(3));
-        PutModule(t_f("Server and port used for newly created accounts has "
-                  "been set to [{1}]")(GetNV("server") + ":" + 
-                  (GetNV("ssl").ToBool() ? "+" + GetNV("port") :
-                  GetNV("port"))));
-    }
-
-    void SetNetworkName(const CString& sLine) {
-        SetNV("networkname", sLine.Token(1));
-        PutModule(t_f("Network name used for newly created accounts has been"
-                  " set to [{1}]")(GetNV("networkname")));
-    }
-
-    void SetImpersonateAccount(const CString& sLine) {
-        SetNV("impersonationusername", sLine.Token(1));
-        SetNV("impersonationpassword", sLine.Token(2));
-        PutModule(t_f("SASL Impersonaton Account Username has been set "
-                      "to [{1}]")(GetNV("impersonationusername")));
-        PutModule(t_f("SASL Impersonaton Account Password has been set to [{1}]")(GetNV("impersonationpassword")));
-    }
-
-    void SetWebIrc(const CString& sLine) {
-        SetNV("webircusername", sLine.Token(1));
-        SetNV("webircpassword", sLine.Token(2));
-        PutModule(t_f("WebIRC Username has been set to [{1}]")(GetNV("webircusername")));
-        PutModule(t_f("WebIRC Password has been set to [{1}]")(GetNV("webircpassword")));
-    }
-
-    void SetWebIrcHost(const CString& sLine) {
-        SetNV("webirchost", sLine.Token(1));
-        PutModule(t_f("WebIRC hostname has been set to [{1}]")(GetNV("webirchost")));
-    }
-
-    void SetUserSalt(const CString& sLine) {
-        SetNV("usersalt", sLine.Token(1));
-        PutModule(t_f("User salt has been set to [{1}]")(GetNV("usersalt")));
+    void SetAuthorizationAccount(const CString& sLine) {
+        if (!sLine.Token(1).empty() && !sLine.Token(2).empty()) {
+            SetNV("saslimpersonation", "yes");
+            SetNV("authzid", sLine.Token(1));
+            SetNV("authzpass", sLine.Token(2));
+            PutModule(t_f("SASL Authorization Account Username has been set "
+                          "to [{1}]")(GetNV("authzid")));
+            PutModule(t_f("SASL Authorization Account Password has been set to [{1}]")(GetNV("authzpass")));
+        } else {
+            SetNV("saslimpersonation", "no");
+            PutModule(t_s("SASL Authorization Account disabled"));
+        }
     }
 
     bool CreateUser() const { return GetNV("CreateUser").ToBool(); }
+
+    bool SaslImpersonate() const { return !GetNV("saslimpersonation").ToBool(); }
 
     CString CloneUser() const { return GetNV("CloneUser"); }
 
@@ -333,8 +255,6 @@ class CSASLAuthMod : public CModule {
 
     sasl_callback_t m_cbs[2];
     CString m_sMethod;
-    bool m_bWebIrcEnabled;
-    bool m_bSaslImpersonateEnabled;
 
     static int getopt(void* context, const char* plugin_name,
                       const char* option, const char** result, unsigned* len) {
@@ -345,20 +265,6 @@ class CSASLAuthMod : public CModule {
 
         return SASL_CONTINUE;
     }
-
-	/** Downsamples a 128bit result to 32bits (md5 -> unsigned int).
-	 * @param[in] i 128bit result to downsample.
-	 * @return downsampled result.
-
-	 */
-	static inline uint8* downsample(unsigned char *i)
-	{
-		uint8* r = new uint8[3];
-		r[0] = i[0] ^ i[1] ^ i[2] ^ i[3] ^ i[4];
-		r[1] = i[5] ^ i[6] ^ i[7] ^ i[8] ^ i[9];
-		r[2] = i[10] ^ i[11] ^ i[12] ^ i[13] ^ i[14] ^ i[15];
-		return r;
-	}
 };
 
 template <>

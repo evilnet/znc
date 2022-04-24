@@ -193,8 +193,14 @@ class CSASLMod : public CModule {
         /* Send blank authenticate for other mechanisms (like EXTERNAL). */
         CString sAuthLine;
         if (m_Mechanisms.GetCurrent().Equals("PLAIN") && sLine.Equals("+")) {
-            sAuthLine = (SaslImpersonation() ? GetNV("impersonationuser") : GetNV("username")) +
-                             '\0' + GetNV("username")  + '\0' + GetNV("password");
+            if (SaslImpersonation()) {
+                sAuthLine = GetNV("authzid") +
+                            '\0' + GetNV("username")  + '\0' + GetNV("authzpass");
+            } else {
+                sAuthLine = GetNV("username") +
+                            '\0' + GetNV("username")  + '\0' + GetNV("password");
+            }
+
             sAuthLine.Base64Encode();
         }
 
