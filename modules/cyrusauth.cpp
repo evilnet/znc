@@ -171,6 +171,7 @@ class CSASLAuthMod : public CModule {
                     network->SetAltNick(sUsernameOrig + "_");
                     network->SetIdent(sUsernameOrig);
                     network->SetRealName(sUsernameOrig);
+                    network->SetIRCConnectEnabled(true);
 
                     if (SaslImpersonate()) {
                         CModule* pModule = network->GetModules().FindModule("sasl");
