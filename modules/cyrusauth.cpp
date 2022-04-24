@@ -147,6 +147,19 @@ class CSASLAuthMod : public CModule {
                     }
                 }
 
+                if (pUser) {
+                    // "::" is an invalid MD5 hash, so user won't be able to
+                    // login by usual method
+                    pUser->SetPass("::", CUser::HASH_MD5, "::");
+                }
+
+                if (pUser && !CZNC::Get().AddUser(pUser, sErr)) {
+                    DEBUG("saslauth: Add user [" << sUsername
+                                         << "] failed: " << sErr);
+                    delete pUser;
+                    pUser = nullptr;
+                }
+
                 pUser->SetNick(sUsernameOrig);
                 pUser->SetAltNick(sUsernameOrig + "_");
                 pUser->SetIdent(sUsernameOrig);
@@ -154,22 +167,12 @@ class CSASLAuthMod : public CModule {
 
                 std::vector<CIRCNetwork*> vNetworks = pUser->GetNetworks();
                 for (auto &network : vNetworks) {
-                    if (pUser) {
-                        // "::" is an invalid MD5 hash, so user won't be able to
-                        // login by usual method
-                        pUser->SetPass("::", CUser::HASH_MD5, "::");
-                    }
-
-                    if (pUser && !CZNC::Get().AddUser(pUser, sErr)) {
-                        DEBUG("saslauth: Add user [" << sUsername
-                                             << "] failed: " << sErr);
-                        delete pUser;
-                        pUser = nullptr;
-                    }
+                    network->SetNick(sUsernameOrig);
+                    network->SetAltNick(sUsernameOrig + "_");
+                    network->SetIdent(sUsernameOrig);
+                    network->SetRealName(sUsernameOrig);
 
                     if (SaslImpersonate()) {
-                        CString sModRet;
-
                         CModule* pModule = network->GetModules().FindModule("sasl");
 
                         if (pModule) {
