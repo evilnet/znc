@@ -181,6 +181,8 @@ class CSASLAuthMod : public CModule {
                             pModule->SetNV("username", sUsername);
                             pModule->SetNV("authzid", GetNV("authzid"));
                             pModule->SetNV("authzpass", GetNV("authzpass"));
+                            pModule->SetNV("require_auth", "yes");
+                            pModule->SetNV("mechanisms", "PLAIN");
                         }
                     }
                 }
